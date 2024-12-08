@@ -24,6 +24,6 @@ class FMP():
             response_data = response.json()
             self.pushAPIData(response_data)
         else:
-            self.logger.info('FMP:   unknown request response')
-            self.logger.info('FMP:   status code: %s' % (response.status_code))
-            self.logger.info('FMP:   content type: %s' % (response.status_code))
+            self.logger.info('FMP:     unknown request response')
+            self.logger.info('FMP:     status code: %s' % (response.status_code))
+            self.logger.info('FMP:     content type: %s' % (response.status_code))

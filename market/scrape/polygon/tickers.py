@@ -24,15 +24,23 @@ class Polygon_Tickers(Polygon):
         #     'timeout': 30,
         # }
         # self.request(request_arguments)
+        request_arguments = {
+            'url': 'https://api.polygon.io/v3/reference/tickers',
+            'params': {
+                'limit': 1000,
+            },
+        }
+
+        self.request(request_arguments)
 
         self.logger.info('Polygon: Polygon_Tickers update done')
 
     def pushAPIData(self, response_data):
-        return
-        # write_data =  {}
-        # for entry in response_data:
-        #     symbol = entry.pop('symbol')
-        #     write_data[symbol] = entry
-        # self.db.table_write('stocklist', write_data, 'symbol', method='update')
+        write_data =  {}
+        for entry in response_data:
+            symbol = entry.pop('ticker')
+            write_data[symbol] = entry
+        self.db.table_write('tickers', write_data, 'symbol', method='update')
+        self.db.commit()
 
         # self.db.tableWrite('status_db', {'ALLSYMBOLS': {'stocklist': int(datetime.now().timestamp())}}, 'keySymbol', method='update')

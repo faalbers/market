@@ -16,7 +16,7 @@ class FMP_Stocklist(FMP):
         super().__init__()
         self.db = Database(self.dbName)
 
-        self.logger.info('FMP:   FMP_Stocklist update')
+        self.logger.info('FMP:     FMP_Stocklist update')
 
         request_arguments = {
             'url': 'https://financialmodelingprep.com/api/v3/stock/list',
@@ -25,7 +25,7 @@ class FMP_Stocklist(FMP):
         }
         self.request(request_arguments)
 
-        self.logger.info('FMP:   FMP_Stocklist update done')
+        self.logger.info('FMP:     FMP_Stocklist update done')
 
     def pushAPIData(self, response_data):
         write_data =  {}
@@ -33,5 +33,6 @@ class FMP_Stocklist(FMP):
             symbol = entry.pop('symbol')
             write_data[symbol] = entry
         self.db.table_write('stocklist', write_data, 'symbol', method='update')
+        self.db.commit()
 
         # self.db.tableWrite('status_db', {'ALLSYMBOLS': {'stocklist': int(datetime.now().timestamp())}}, 'keySymbol', method='update')

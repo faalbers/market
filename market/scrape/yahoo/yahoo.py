@@ -60,7 +60,7 @@ class Yahoo():
         failed_total = 0
         for symbol, request_arguments in requests_list:
             if (count_done % 10) == 0:
-                self.logger.info('Yahoo: to do: %s , failed: %s' % (len(requests_list)-count_done, failed))
+                self.logger.info('Yahoo:   to do: %s , failed: %s' % (len(requests_list)-count_done, failed))
                 failed = 0
             response = self.session_get(request_arguments)
             if response.headers.get('content-type').startswith('application/json'):
@@ -70,12 +70,12 @@ class Yahoo():
                         failed += 1
                         failed_total += 1
                     else:
-                        self.logger.info('Yahoo: %s: %s' % (symbol, response_data['error']['code']))
+                        self.logger.info('Yahoo:   %s: %s' % (symbol, response_data['error']['code']))
                 elif response_data['result']:
                     self.pushAPIData(symbol, response_data['result'][0])
             else:
-                self.logger.info('Yahoo: %s: unknown request response' % symbol)
-                self.logger.info('Yahoo: %s: status code: %s' % (symbol, response.status_code))
-                self.logger.info('Yahoo: %s: content type: %s' % (symbol, response.status_code))
+                self.logger.info('Yahoo:   %s: unknown request response' % symbol)
+                self.logger.info('Yahoo:   %s: status code: %s' % (symbol, response.status_code))
+                self.logger.info('Yahoo:   %s: content type: %s' % (symbol, response.status_code))
             count_done += 1
-        self.logger.info('Yahoo: done: %s , failed: %s' % (len(requests_list), failed_total))
+        self.logger.info('Yahoo:   done: %s , failed: %s' % (len(requests_list), failed_total))
