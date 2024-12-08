@@ -1,8 +1,6 @@
 from .yahoo import Yahoo
-from multiprocessing import get_logger
 import logging
 from ...database import Database
-from time import sleep
 
 class Yahoo_Quote(Yahoo):
     dbName = 'yahoo_quote'
@@ -43,8 +41,10 @@ class Yahoo_Quote(Yahoo):
             }
             requests_list.append((symbol,request_arguments))
         self.logger.info('Yahoo: modules processing : %s' % " ".join(modules_processing))
-        self.multi_symbols_request(requests_list)
-        
+        self.multi_request(requests_list)
+
+        self.logger.info('Yahoo: Yahoo_Quote update done')
+
     def pushAPIData(self, symbol, response_data):
         for module, module_data in response_data.items():
             self.db.table_write(module, {symbol: module_data}, 'symbol', method='replace')

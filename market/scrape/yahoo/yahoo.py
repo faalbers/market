@@ -54,18 +54,28 @@ class Yahoo():
     def session_get(self, request_arguments):
         return self.session.get(**request_arguments)
 
-    def multi_symbols_request(self, requests_list):
+    def multi_request(self, requests_list):
         count_done = 0
         failed = 0
+        failed_total = 0
         for symbol, request_arguments in requests_list:
             if (count_done % 10) == 0:
                 self.logger.info('Yahoo: to do: %s , failed: %s' % (len(requests_list)-count_done, failed))
                 failed = 0
             response = self.session_get(request_arguments)
             if response.headers.get('content-type').startswith('application/json'):
-                symbol_data = response.json()['quoteSummary']
-                if symbol_data['error'] and symbol_data['error']['code'] == 'Not Found':
-                    failed += 1
-                elif symbol_data['result']:
-                    self.pushAPIData(symbol, symbol_data['result'][0])
+                response_data = response.json()['quoteSummary']
+                if response_data['error']:
+                    if response_data['error']['code'] == 'Not Found':
+                        failed += 1
+                        failed_total += 1
+                    else:
+                        self.logger.info('Yahoo: %s: %s' % (symbol, response_data['error']['code']))
+                elif response_data['result']:
+                    self.pushAPIData(symbol, response_data['result'][0])
+            else:
+                self.logger.info('Yahoo: %s: unknown request response' % symbol)
+                self.logger.info('Yahoo: %s: status code: %s' % (symbol, response.status_code))
+                self.logger.info('Yahoo: %s: content type: %s' % (symbol, response.status_code))
             count_done += 1
+        self.logger.info('Yahoo: done: %s , failed: %s' % (len(requests_list), failed_total))

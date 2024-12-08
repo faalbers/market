@@ -16,8 +16,6 @@ class Vault():
         queue_handler = logging.handlers.QueueHandler(log_queue)  
         logger.addHandler(queue_handler)  
 
-        logger.info('update_scrapers: multi')
-
         for scraper_class, table_names in update_scrapers.items():
             scraper_class(key_values, table_names=table_names)
 
