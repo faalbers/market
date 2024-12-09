@@ -31,10 +31,10 @@ class Database():
         self.connection.close()
         self.connection = None
 
-    def getConnection(self):
+    def get_connection(self):
         return self.connection
     
-    def getCursor(self):
+    def get_cursor(self):
         return self.connection.cursor()
 
     def commit(self):

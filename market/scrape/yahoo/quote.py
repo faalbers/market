@@ -20,9 +20,9 @@ class Yahoo_Quote(Yahoo):
 
         if len(symbol_modules) == 0: return
 
-        self.logger.info('Yahoo:   Yahoo_Quote update')
-        self.logger.info('Yahoo:   requested modules  : %s' % ' '.join(table_names))
-        self.logger.info('Yahoo:   symbols processing : %s' % len(key_values))
+        self.logger.info('Yahoo:   Quote: update')
+        self.logger.info('Yahoo:   Quote: requested modules  : %s' % ' '.join(table_names))
+        self.logger.info('Yahoo:   Quote: symbols processing : %s' % len(key_values))
 
         # create request arguments list
         requests_list = []
@@ -40,12 +40,20 @@ class Yahoo_Quote(Yahoo):
                 'timeout': 30,
             }
             requests_list.append((symbol,request_arguments))
-        self.logger.info('Yahoo:   modules processing : %s' % " ".join(modules_processing))
+        self.logger.info('Yahoo:   Quote: modules processing : %s' % " ".join(modules_processing))
         self.multi_request(requests_list)
 
         self.logger.info('Yahoo:   Yahoo_Quote update done')
 
     def pushAPIData(self, symbol, response_data):
-        for module, module_data in response_data.items():
-            self.db.table_write(module, {symbol: module_data}, 'symbol', method='replace')
+        response_data = response_data['quoteSummary']
+        if response_data['error']:
+            if response_data['error']['code'] != 'Not Found':
+                self.logger.info('Yahoo:   Quote: %s: %s' % (symbol, response_data['error']['code']))
+            return False
+        elif response_data['result']:
+            for module, module_data in response_data['result'][0].items():
+                self.db.table_write(module, {symbol: module_data}, 'symbol', method='replace')
+            return True
+        return False
 

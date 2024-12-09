@@ -66,6 +66,45 @@ class Catalog():
                         },
                     },
                 },
+                'test_set_e': {
+                    # 'postProcs': [[__dropParent, {}]],
+                    'scrapes': {
+                        File_Files: {
+                            'all': {
+                                'keyValues': False,
+                                'columnSettings': [
+                                    ['all', '', {}],
+                                ],
+                            },
+                        },
+                    },
+                },
+                'test_set_f': {
+                    # 'postProcs': [[__dropParent, {}]],
+                    'scrapes': {
+                        Finviz_Ticker_News: {
+                            'table_reference': {
+                                'keyValues': True,
+                                'columnSettings': [
+                                    ['all', '', {}],
+                                ],
+                            },
+                        },
+                    },
+                },
+                'test_set_g': {
+                    # 'postProcs': [[__dropParent, {}]],
+                    'scrapes': {
+                        Yahoo_Chart: {
+                            'quoteType': {
+                                'keyValues': True,
+                                'columnSettings': [
+                                    ['all', '', {}],
+                                ],
+                            },
+                        },
+                    },
+                },
             },
         },
     }

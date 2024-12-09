@@ -59,20 +59,15 @@ class Yahoo():
         failed = 0
         failed_total = 0
         for symbol, request_arguments in requests_list:
-            if (count_done % 10) == 0:
+            if (count_done % 100) == 0:
                 self.logger.info('Yahoo:   to do: %s , failed: %s' % (len(requests_list)-count_done, failed))
                 failed = 0
             response = self.session_get(request_arguments)
             if response.headers.get('content-type').startswith('application/json'):
-                response_data = response.json()['quoteSummary']
-                if response_data['error']:
-                    if response_data['error']['code'] == 'Not Found':
-                        failed += 1
-                        failed_total += 1
-                    else:
-                        self.logger.info('Yahoo:   %s: %s' % (symbol, response_data['error']['code']))
-                elif response_data['result']:
-                    self.pushAPIData(symbol, response_data['result'][0])
+                found = self.pushAPIData(symbol, response.json())
+                if not found:
+                    failed += 1
+                    failed_total += 1
             else:
                 self.logger.info('Yahoo:   %s: unknown request response' % symbol)
                 self.logger.info('Yahoo:   %s: status code: %s' % (symbol, response.status_code))
