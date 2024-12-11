@@ -21,7 +21,8 @@ class Polygon():
     def request(self, request_arguments):
         next_request_arguments = request_arguments
         entries = 0
-        while next_request_arguments != None:
+        # runs = 2
+        while next_request_arguments:
             response = self.session_get(next_request_arguments)
             if response.headers.get('content-type').startswith('application/json'):
                 write_data = {}
@@ -39,4 +40,6 @@ class Polygon():
             else:
                 next_request_arguments = None
             # print(next_request_arguments)
-            # next_request_arguments = None
+            # runs -= 1
+            # if runs == 0:
+            #     next_request_arguments = None

@@ -9,8 +9,6 @@ class Yahoo_Chart(Yahoo):
 
     @staticmethod
     def get_table_names(table_name):
-        # if table_name == 'all':
-        #     return list(const.QUOTESUMMARY_MODULES.keys())
         return [table_name]
 
     def __init__(self, key_values=[], table_names=[]):

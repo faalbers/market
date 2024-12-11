@@ -61,6 +61,7 @@ class Yahoo():
         for symbol, request_arguments in requests_list:
             if (count_done % 100) == 0:
                 self.logger.info('Yahoo:   to do: %s , failed: %s' % (len(requests_list)-count_done, failed))
+                self.db.commit()
                 failed = 0
             response = self.session_get(request_arguments)
             if response.headers.get('content-type').startswith('application/json'):
