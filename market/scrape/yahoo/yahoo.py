@@ -72,6 +72,6 @@ class Yahoo():
             else:
                 self.logger.info('Yahoo:   %s: unknown request response' % symbol)
                 self.logger.info('Yahoo:   %s: status code: %s' % (symbol, response.status_code))
-                self.logger.info('Yahoo:   %s: content type: %s' % (symbol, response.status_code))
+                self.logger.info('Yahoo:   %s: content type: %s' % (symbol, response.headers.get('content-type')))
             count_done += 1
         self.logger.info('Yahoo:   done: %s , failed: %s' % (len(requests_list), failed_total))

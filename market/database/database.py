@@ -188,47 +188,44 @@ class Database():
         
         cursor.close()
 
-    def table_read(self, table_name, key_values=[], columns=[], handle_key_values=True, max_column=None):
-        # print()
-        # print(table_name)
-        # print(key_values)
-        # print(columns)
-        # print(handle_key_values)
-        
+    def table_read(self, table_name, key_values=[], column_values=[], max_column=None):
         # get table info
         table_info = self.get_table_info(table_name)
         if not table_info: return {}
-        table_columns = set(table_info['columns']).difference(set(table_info['primaryKeyColumns']))
+        # get list of columns without the key columns
+        table_columns = table_info['columns']
+        column_values = set(column_values)
         
-        # if we need to handle key values but there are none, return empty
-        if handle_key_values:
-            if len(table_info['primaryKeyColumns']) > 0:
-                key_column = table_info['primaryKeyColumns'][0]
-            else:
-                return {}
+        # get key column if any and construct table_columns
+        key_column = None
+        if len(table_info['primaryKeyColumns']) > 0:
+            key_column = table_info['primaryKeyColumns'][0]
         
-        # get data
-        if len(columns) == 0:
+        # create selection exec string
+        if len(column_values) == 0:
+            # we are selecting all columns
             columns_string = '*'
         else:
             # handle only columns that exist
-            columns = set(columns).intersection(table_columns)
+            columns = column_values.intersection(table_columns)
             columns_string = ','.join(['[%s]'%x for x in columns])
             # return empty if no columns to be searched
             if columns_string == '': return {}
-            if handle_key_values:
+            if key_column and not key_column in columns:
                 columns_string = '[%s],'%key_column+columns_string
         exec_string = "SELECT %s FROM '%s'" % (columns_string, table_name)
         
         execution = None
         cursor = self.connection.cursor()
-        if handle_key_values and len(key_values) > 0:
+        if key_column and len(key_values) > 0:
+            # we will only get the ones with the key values
             value_holder_string = ','.join(['?']*len(key_values))
             exec_string += " WHERE [%s] IN (%s)" % (key_column, value_holder_string)
             if max_column:
                 exec_string += " ORDER BY [%s] DESC LIMIT 1" % max_column
             execution = cursor.execute(exec_string, tuple(key_values))
         else:
+            # we are getting them all
             if max_column:
                 exec_string += " ORDER BY [%s] DESC LIMIT 1" % max_column
             execution = cursor.execute(exec_string)
@@ -239,33 +236,45 @@ class Database():
         data_values = execution.fetchall()
         cursor.close()
 
-        # retrieve data in dictionary
+        # retrieve data in dictionary or list
         data_dictionary = {}
         data_list = []
-        for row_values in data_values:
-            if handle_key_values:
-                rowData = data_dictionary[row_values[0]] = {}
-                c_index = 1
-                row_values = row_values[1:]
-            else:
-                rowData = {}
-                c_index = 0
-            for value in row_values:
-                if value != None:
-                    if data_columns_sql_types[c_index] == 'JSON':
-                        value = json.loads(value)
-                    rowData[data_columns[c_index]] = value
-                c_index += 1
-            if not handle_key_values:
-                data_list.append(rowData)
+        key_column_index = -1
+        if key_column:
+            key_column_index = data_columns.index(key_column)
+        # print(data_columns)
+        # print(data_columns_sql_types)
+        # print(key_column_index)
 
-        if handle_key_values:
+        for row_values in data_values:
+            # create dict out of row data
+            row_data = dict(zip(data_columns, row_values))
+
+            # handle JSON
+            json_indices = [i for i, s in enumerate(data_columns_sql_types) if s == 'JSON']
+            for json_index in json_indices:
+                if row_data[data_columns[json_index]] != None:
+                    row_data[data_columns[json_index]] = json.loads(row_data[data_columns[json_index]])
+
+            # get key value if needed
+            if key_column_index != -1: key_value = row_values[key_column_index]
+
+            # only keep row data that is requested
+            if len(column_values) > 0:
+                row_data = {k: v for k, v in row_data.items() if k in column_values}
+         
+            if key_column_index != -1:
+                data_dictionary[key_value] = row_data
+            else:
+                data_list.append(row_data)
+
+        if key_column:
             return data_dictionary
         else:
             return data_list
 
     def get_table_info(self, table_name):
-        if not self.tableExists(table_name): return None
+        if not self.table_exists(table_name): return None
 
         table_info = {
             'columns': [],
@@ -282,7 +291,6 @@ class Database():
         cursor.close()
 
         for table_column in table_columns:
-            # print(table_column)
             table_info['columns'].append(table_column[1])
             if table_column[5]: table_info['primaryKeyColumns'].append(table_column[1])
             table_info['columnTypes'][table_column[1]] = table_column[2]
@@ -291,7 +299,7 @@ class Database():
 
         return table_info
 
-    def tableExists(self, table_name):
+    def table_exists(self, table_name):
         return table_name in self.get_table_names()
 
     def get_table_names(self):
@@ -299,3 +307,11 @@ class Database():
         names = [ x[0] for x in cursor.execute("SELECT name FROM sqlite_schema WHERE type='table'")]
         cursor.close()
         return names
+
+    def get_table_column_names(self, tableName):
+        if not self.table_exists(tableName): return []
+        cursor = self.connection.cursor()
+        tableInfo = cursor.execute("PRAGMA table_info(%s)" % tableName).fetchall()
+        cursor.close()
+        return [x[1] for x in tableInfo]
+

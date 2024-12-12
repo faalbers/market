@@ -16,17 +16,13 @@ class Yahoo_Chart(Yahoo):
         super().__init__()
         self.db = Database(self.dbName)
 
-        symbol_modules = {symbol: table_names for symbol in key_values}
-
-        if len(symbol_modules) == 0: return
-
         self.logger.info('Yahoo:   Chart: update')
         self.logger.info('Yahoo:   Chart: symbols processing : %s' % len(key_values))
 
         # create request arguments list
         requests_list = []
         now = datetime.now()
-        for symbol, modules in symbol_modules.items():
+        for symbol in key_values:
             period1 = int((now - relativedelta(years=10)).timestamp())
             period2 = int(now.timestamp())
             request_arguments = {
@@ -45,6 +41,7 @@ class Yahoo_Chart(Yahoo):
         self.logger.info('Yahoo:   Chart: Yahoo_Chart update done')
 
     def pushAPIData(self, symbol, response_data):
+        symbol = symbol.upper()
         if 'chart' in response_data:
             # handle API response
             response_data = response_data['chart']

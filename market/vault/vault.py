@@ -80,19 +80,21 @@ class Vault():
 
             sets_data = {}
             for set_name , set_data in catalog_data['sets'].items():
+                # handle sets
                 tables_data = {}
                 for scrape_class, scrape_data in set_data['scrapes'].items():
+                    # handle scrapes
                     db = self.get_scrape_database(scrape_class)
                     for table_name, table_data in scrape_data.items():
                         scrape_table_names = scrape_class.get_table_names(table_name)
-                        handle_key_values = table_data['key_values']
                         for table_name in scrape_table_names:
+                            # handle table names
                             columns = {}
                             for column_set in table_data['column_settings']:
                                 search_column = column_set[0]
                                 make_column = column_set[1]
                                 if search_column == 'all':
-                                    for column_name in db.getTableColumnNames(table_name):
+                                    for column_name in db.get_table_column_names(table_name):
                                         if make_column != '':
                                             newColumnName = make_column + column_name.capitalize()
                                         else:
@@ -106,12 +108,12 @@ class Vault():
                                     columns[search_column]['new_name'] = make_column
 
                             # get table data
-                            found_data = db.table_read(table_name, key_values, list(columns.keys()), handle_key_values=handle_key_values)
+                            found_data = db.table_read(table_name, key_values, list(columns.keys()))
                             # skip if no data found
                             if len(found_data) == 0: continue
 
                             # make data
-                            if handle_key_values:
+                            if isinstance(found_data, dict):
                                 make_data = {}
                                 for key_value, key_data in found_data.items():
                                     new_key_data = {}
@@ -120,7 +122,7 @@ class Vault():
                                         new_key_data[column_settings['new_name']] = key_data[search_column]
                                     if len(new_key_data) > 0:
                                         make_data[key_value] = new_key_data
-                            else:
+                            elif isinstance(found_data, list):
                                 make_data = []
                                 for rowData in found_data:
                                     new_row_data = {}
@@ -129,6 +131,8 @@ class Vault():
                                         new_row_data[column_settings['new_name']] = rowData[search_column]
                                     if len(new_row_data) > 0:
                                         make_data.append(new_row_data)
+                            else:
+                                raise Exception('Database.table_read: Unknown data type %s' % (type(found_data)))
 
                             if len(make_data) > 0:
                                 tables_data[table_name] = make_data
@@ -138,7 +142,7 @@ class Vault():
                     for proc_entry in set_data['post_procs']:
                         proc = proc_entry[0]
                         proc_params = proc_entry[1]
-                        proc(self, tables_data, **proc_params)
+                        tables_data = proc(self, tables_data, **proc_params)
                         # sets_data[set_name] = proc(self, tables_data, **proc_params)
                 sets_data[set_name] = tables_data
                 
@@ -147,7 +151,7 @@ class Vault():
                 for procEntry in catalog_data['post_procs']:
                     proc = procEntry[0]
                     procParams = procEntry[1]
-                    proc(self, sets_data, **procParams)
+                    sets_data = proc(self, sets_data, **procParams)
             main_data[catalog] = sets_data
         
         self.close_all_scrape_databases()

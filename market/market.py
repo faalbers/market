@@ -7,8 +7,12 @@ from pprint import pp
 class Market():
     @staticmethod 
     def excepthook(exc_type, exc_value, exc_traceback):
-        # terminate all lingering processess
-        for p in multiprocessing.active_children(): p.terminate()
+        # stop logger befor the exception traceback
+        logger = logging.getLogger('Market')
+        logger.exception('Market: %s: %s' % (exc_type.__name__,exc_value), exc_info=(exc_type, exc_value, exc_traceback))
+        # logger.exception(exc_info=(exc_type, exc_value, exc_traceback))
+        log_queue = logger.handlers[0].queue
+        log_queue.put_nowait(None)
         # print traceback
         traceback.print_exception(exc_type, exc_value, exc_traceback)
 
@@ -55,9 +59,42 @@ class Market():
         sys.excepthook = self.builtin_excepthook
         self.log_queue.close()
 
-    def get_us_market_symbols(self):
-        test = self.vault.get_data(['symbols'])['symbols']
-        pp(test['test'].keys())
-        return ['AAPL']
+    def get_us_market_symbols(self, update=False):
+        test = self.vault.get_data(['symbols'], update=update)['symbols']
+        
+        symbols = set()
+        
+        # get us acronyms
+        acronyms_us = set()
+        for iso_entry in test['iso']:
+            if 'cc' in iso_entry and iso_entry['cc'] == 'US':
+                if 'acronym' in iso_entry: acronyms_us.add(iso_entry['acronym'])
+        for iso_entry in test['iso']:
+            if 'acronym' in iso_entry and iso_entry['acronym'] in acronyms_us:
+                if iso_entry['cc'] != 'US':
+                    acronyms_us.remove(iso_entry['acronym'])
 
+        # get stocklist symbols with acronym in us
+        for symbol, symbol_data in test['symbols']['stocklist'].items():
+            if 'acronym' in symbol_data and symbol_data['acronym'] in acronyms_us: symbols.add(symbol)
+        
+        # get tickers symbols with locale us
+        for symbol, symbol_data in test['symbols']['tickers'].items():
+            # dont want these
+            if symbol_data['market'] in {'crypto', 'fx'}: continue
+
+            if 'locale' in symbol_data and symbol_data['locale'] == 'us': symbols.add(symbol)
+        
+        symbols = list(symbols)
+        symbols.sort()
+        
+        return symbols
+
+    def update_us_market_symbols(self):
+        symbols = self.get_us_market_symbols(update=True)
+        self.vault.update(['update_us_symbols'], symbols)
     
+    def update_all(self):
+        symbols = self.get_us_market_symbols()
+        print(len(symbols))
+        self.vault.update(['update_all'],symbols)

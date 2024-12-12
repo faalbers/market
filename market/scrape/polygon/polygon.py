@@ -18,17 +18,17 @@ class Polygon():
     def session_get(self, request_arguments):
         return self.session.get(**request_arguments)
     
-    def request(self, request_arguments):
+    def request(self, request_arguments, push_proc):
         next_request_arguments = request_arguments
         entries = 0
-        # runs = 2
+        # runs = 1
         while next_request_arguments:
             response = self.session_get(next_request_arguments)
             if response.headers.get('content-type').startswith('application/json'):
                 write_data = {}
                 response_data = response.json()
                 if 'results' in response_data:
-                    self.pushAPIData(response_data['results'])
+                    push_proc(response_data['results'])
                 else:
                     self.logger.info('Polygon: no result in response chunk, stopping requests')
                     break

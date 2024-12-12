@@ -12,28 +12,43 @@ class Catalog():
 
     @staticmethod
     def merge(self, data):
+        merge_types = set()
+        for merge_name, merge_data in data.items():
+            merge_types.add(type(merge_data))
+        
+        if len(merge_types) > 1:
+            raise ValueError('Catalog.merge: mixed merge types: %s' % merge_types)
+        
+        merge_type = merge_types.pop()
+        new_list = []
         for merge_name in list(data.keys()):
-            # print(merge_name)
-            for key_name, key_data in data.pop(merge_name).items(): 
-                if not key_name in data:
-                    data[key_name] = key_data
-                else:
-                    key_name_collision = set(data[key_name].keys()).intersection(key_data.keys())
-                    if len(key_name_collision) > 0:
-                        raise ValueError('Catalog.merge: key names collision: %s' % key_name_collision)
-                    data[key_name] = {**data[key_name], **key_data}
+            if merge_type == dict:
+                for key_name, key_data in data.pop(merge_name).items(): 
+                    if not key_name in data:
+                        data[key_name] = key_data
+                    else:
+                        key_name_collision = set(data[key_name].keys()).intersection(key_data.keys())
+                        if len(key_name_collision) > 0:
+                            raise ValueError('Catalog.merge: key names collision: %s' % key_name_collision)
+                        data[key_name] = {**data[key_name], **key_data}
+            elif merge_type == list:
+                new_list += data[merge_name]
+        
+        if merge_type == list: data = new_list
+
+        return data
     
     catalog = {
         'symbols': {
-            'info': 'catalog test',
+            'info': 'get all symbols for market and locale',
             # 'post_procs': [[merge, {}]],
             'sets': {
-                'test': {
+                'symbols': {
                     # 'post_procs': [[merge, {}]],
                     'scrapes': {
                         FMP_Stocklist: {
                             'stocklist': {
-                                'key_values': True,
+                                # 'key_values': True,
                                 'column_settings': [
                                     ['exchangeShortName', 'acronym'],
                                 ],
@@ -41,12 +56,52 @@ class Catalog():
                         },
                         Polygon_Tickers: {
                             'tickers': {
-                                'keyValues': True,
-                                'columnSettings': [
-                                    ['primary_exchange', 'mic'],
+                                # 'key_values': True,
+                                'column_settings': [
+                                    ['locale', 'locale'],
+                                    ['market', 'market'],
                                 ],
                             },
                         },
+                    },
+                },
+                'iso': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        File_Files: {
+                            'ISO10383_MIC': {
+                                # 'key_values': False,
+                                'column_settings': [
+                                    ['ACRONYM', 'acronym'],
+                                    ['ISO COUNTRY CODE (ISO 3166)', 'cc'],
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        'update_all': {
+            'info': 'update all scrapes',
+            'sets': {
+                'all': {
+                    'scrapes': {
+                        # Yahoo_Quote: {'all': {},},
+                        # Yahoo_Chart: {'all': {},},
+                        # Finviz_Ticker_News: {'all': {},},
+                        Polygon_News: {'all': {},},
+                    },
+                },
+            },
+        },
+        'update_us_symbols': {
+            'info': 'update all scrapes that have symbols data to download',
+            'sets': {
+                'all': {
+                    'scrapes': {
+                        Yahoo_Quote: {'all': {},},
+                        Yahoo_Chart: {'all': {},},
+                        Finviz_Ticker_News: {'all': {},},
                     },
                 },
             },

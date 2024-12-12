@@ -18,8 +18,6 @@ class Polygon_News(Polygon):
         super().__init__()
         self.db = Database(self.dbName)
 
-        self.logger.info('Polygon: Polygon_News update')
-
         request_arguments = {
             'url': 'https://api.polygon.io/v2/reference/news',
             'params': {
@@ -28,11 +26,23 @@ class Polygon_News(Polygon):
                 'order': 'asc'
             },
         }
-        self.request(request_arguments)
+
+        last_published_utc = self.db.table_read('news_articles', column_values=['published_utc'], max_column='timestamp')
+        if len(last_published_utc) > 0:
+            last_published_utc = next(iter(last_published_utc.values()))['published_utc']
+            self.logger.info('Polygon: Polygon_News update starting from: %s' % last_published_utc)
+            request_arguments['params']['published_utc.gt'] = last_published_utc
+        else:
+            self.logger.info('Polygon: Polygon_News update starting from beginning')
+
+        # backup first
+        self.db.backup()
+
+        self.request(request_arguments, self.push_news_data)
 
         self.logger.info('Polygon: Polygon_News update done')
 
-    def pushAPIData(self, response_data):
+    def push_news_data(self, response_data):
         write_news =  {}
         write_symbols = {}
         for entry in response_data:
@@ -41,10 +51,10 @@ class Polygon_News(Polygon):
             while timestamp in write_news: timestamp += 1
             write_news[timestamp] = entry
             for symbol in symbols:
+                symbol = symbol.upper()
                 if not symbol in write_symbols:
                     write_symbols[symbol] = []
                 write_symbols[symbol].append(timestamp)
-        
         # append the news articles
         self.db.table_write('news_articles', write_news, 'timestamp', method='append')
 

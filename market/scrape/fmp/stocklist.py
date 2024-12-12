@@ -19,7 +19,7 @@ class FMP_Stocklist(FMP):
         self.db = Database(self.dbName)
 
         # updated if longer then 60 half a year ago or initial version
-        status = self.db.table_read('status_db', key_values=['stocklist'], columns=['timestamp'])
+        status = self.db.table_read('status_db', key_values=['stocklist'], column_values=['table_name', 'timestamp'])
         if status:
             if int((datetime.now() - relativedelta(months=6)).timestamp()) < status['stocklist']['timestamp']: return
 
@@ -43,6 +43,6 @@ class FMP_Stocklist(FMP):
     def pushAPIData(self, response_data):
         write_data =  {}
         for entry in response_data:
-            symbol = entry.pop('symbol')
+            symbol = entry.pop('symbol').upper()
             write_data[symbol] = entry
         self.db.table_write('stocklist', write_data, 'symbol', method='update')

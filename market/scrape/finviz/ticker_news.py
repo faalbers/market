@@ -31,6 +31,7 @@ class Finviz_Ticker_News(Finviz):
         self.logger.info('Finviz:  Finviz_Ticker_News update done')
 
     def pushAPIData(self, symbol,news_df):
+        symbol = symbol.upper()
         news_df.sort_values(by='Date', inplace=True)
         news_df.reset_index(drop=True, inplace=True)
         news_df['Date'] = news_df['Date'].apply(lambda x: int(x.timestamp()))
