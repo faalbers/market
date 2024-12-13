@@ -73,6 +73,8 @@ class Vault():
             self.close_scrape_database(scrape_class)
 
     def get_data(self, catalogs=[], key_values=[], update=False):
+        # NOTE: should we have it handle only one catalog instead of list also ?
+        
         if update : self.update(catalogs, key_values)
 
         main_data = {}

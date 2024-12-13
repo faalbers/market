@@ -102,6 +102,13 @@ class Market():
     def update_nightly(self, symbols=[]):
         if len(symbols) == 0:
             scrape_symbols = self.get_scrape_symbols()
+            # TODO: Probably get_us_market_symbols if no symbols found
             symbols = list(set(scrape_symbols['Yahoo_Chart']).union(set(scrape_symbols['Yahoo_Quote'])))
             symbols.sort()
+        else:
+            symbols = [symbol.upper() for symbol in symbols]
         self.vault.update(['update_nightly'],symbols)
+
+    def update_symbols(self, symbols):
+        symbols = [symbol.upper() for symbol in symbols]
+        self.vault.update(['update_symbols'],symbols)

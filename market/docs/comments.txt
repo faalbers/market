@@ -1,0 +1,9 @@
+comment types:
+
+recognized by pylance:
+    TODO: Displays a blue circle with a white checkmark icon in the gutter and a "TODO" label in the Problems panel.
+    FIXME: Displays a red circle with a white exclamation mark icon in the gutter and a "FIXME" label in the Problems panel.
+    BUG: Displays a red circle with a white bug icon in the gutter and a "BUG" label in the Problems panel.
+    NOTE: Displays a blue circle with a white note icon in the gutter and a "NOTE" label in the Problems panel.
+    HACK: Displays a yellow circle with a white warning icon in the gutter and a "HACK" label in the Problems panel.
+

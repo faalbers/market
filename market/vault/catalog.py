@@ -38,6 +38,14 @@ class Catalog():
 
         return data
     
+    @staticmethod
+    def reference(self, data, table_reference):
+        data_reference = {}
+        for key_value, reference_data in data[table_reference].items():
+            print(key_value)
+            print(reference_data)
+
+    
     catalog = {
         'symbols': {
             'info': 'get all symbols in our scrapes',
@@ -122,6 +130,18 @@ class Catalog():
                 },
             },
         },
+        'update_symbols': {
+            'info': 'update all scrapes with symbol kewy values',
+            'sets': {
+                'all': {
+                    'scrapes': {
+                        Yahoo_Quote: {'all': {},},
+                        Yahoo_Chart: {'all': {},},
+                        Finviz_Ticker_News: {'all': {},},
+                    },
+                },
+            },
+        },
         'update_all': {
             'info': 'update all scrapes',
             'sets': {
@@ -135,14 +155,39 @@ class Catalog():
                 },
             },
         },
-        'update_test': {
-            'info': 'scrapes update test',
+        'reference_test': {
+            'info': 'referencing test',
             'sets': {
-                'all': {
+                'chart': {
+                    'post_procs': [
+                        [reference,
+                            {
+                                'table_reference': 'table_reference',
+                            }
+                        ],
+                    ],
                     'scrapes': {
-                        Yahoo_Chart: {'all': {},},
+                        Yahoo_Chart: {
+                            'table_reference': {
+                                'column_settings': [
+                                    ['chart', 'chart'],
+                                ],
+                            },
+                        },
                     },
                 },
+                # 'news': {
+                #     'post_procs': [[reference, {}]],
+                #     'scrapes': {
+                #         Polygon_News: {
+                #             'table_reference': {
+                #                 'column_settings': [
+                #                     ['news', 'news'],
+                #                 ],
+                #             },
+                #         },
+                #     },
+                # },
             },
         },
         'statistics': {
