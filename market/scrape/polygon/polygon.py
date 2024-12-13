@@ -21,7 +21,7 @@ class Polygon():
     def request(self, request_arguments, push_proc):
         next_request_arguments = request_arguments
         entries = 0
-        # runs = 1
+        # runs = 10
         while next_request_arguments:
             response = self.session_get(next_request_arguments)
             if response.headers.get('content-type').startswith('application/json'):
@@ -32,7 +32,8 @@ class Polygon():
                 else:
                     self.logger.info('Polygon: no result in response chunk, stopping requests')
                     break
-                entries += response_data['count']
+                if 'count' in response_data:
+                    entries += response_data['count']
                 self.logger.info('Polygon: entries found: %s' % entries)
                 next_request_arguments = None
                 if 'next_url' in response_data:

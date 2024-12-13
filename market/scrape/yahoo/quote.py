@@ -26,6 +26,9 @@ class Yahoo_Quote(Yahoo):
         self.logger.info('Yahoo:   Quote: requested modules  : %s' % ' '.join(table_names))
         self.logger.info('Yahoo:   Quote: symbols processing : %s' % len(key_values))
 
+        # backup first
+        self.db.backup()
+
         # create request arguments list
         requests_list = []
         for symbol, modules in symbol_modules.items():

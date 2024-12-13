@@ -18,7 +18,12 @@ class Finviz_Ticker_News(Finviz):
         super().__init__()
         self.db = Database(self.dbName)
 
+        if len(key_values) == 0: return
+
         self.logger.info('Finviz:  Finviz_Ticker_News update')
+
+        # backup first
+        self.db.backup()
 
         symbols_done = 0
         for symbol in key_values:

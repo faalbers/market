@@ -11,7 +11,7 @@ class Catalog():
         return {}
 
     @staticmethod
-    def merge(self, data):
+    def merge(self, data, allow_collision=False):
         merge_types = set()
         for merge_name, merge_data in data.items():
             merge_types.add(type(merge_data))
@@ -26,7 +26,7 @@ class Catalog():
                 for key_name, key_data in data.pop(merge_name).items(): 
                     if not key_name in data:
                         data[key_name] = key_data
-                    else:
+                    elif not allow_collision:
                         key_name_collision = set(data[key_name].keys()).intersection(key_data.keys())
                         if len(key_name_collision) > 0:
                             raise ValueError('Catalog.merge: key names collision: %s' % key_name_collision)
@@ -40,6 +40,36 @@ class Catalog():
     
     catalog = {
         'symbols': {
+            'info': 'get all symbols in our scrapes',
+            # 'post_procs': [[merge, {}]],
+            'sets': {
+                'Yahoo_Quote': {
+                    'post_procs': [[merge, {'allow_collision': True}]],
+                    'scrapes': {
+                        Yahoo_Quote: {
+                            'all': {
+                                'column_settings': [
+                                    ['symbol', 'symbol'],
+                                ],
+                            },
+                        },
+                    },
+                },
+                'Yahoo_Chart': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        Yahoo_Chart: {
+                            'table_reference': {
+                                'column_settings': [
+                                    ['symbol', 'symbol'],
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+       'us_symbols': {
             'info': 'get all symbols for market and locale',
             # 'post_procs': [[merge, {}]],
             'sets': {
@@ -48,7 +78,6 @@ class Catalog():
                     'scrapes': {
                         FMP_Stocklist: {
                             'stocklist': {
-                                # 'key_values': True,
                                 'column_settings': [
                                     ['exchangeShortName', 'acronym'],
                                 ],
@@ -56,7 +85,6 @@ class Catalog():
                         },
                         Polygon_Tickers: {
                             'tickers': {
-                                # 'key_values': True,
                                 'column_settings': [
                                     ['locale', 'locale'],
                                     ['market', 'market'],
@@ -70,7 +98,6 @@ class Catalog():
                     'scrapes': {
                         File_Files: {
                             'ISO10383_MIC': {
-                                # 'key_values': False,
                                 'column_settings': [
                                     ['ACRONYM', 'acronym'],
                                     ['ISO COUNTRY CODE (ISO 3166)', 'cc'],
@@ -81,27 +108,39 @@ class Catalog():
                 },
             },
         },
-        'update_all': {
+        'update_nightly': {
             'info': 'update all scrapes',
-            'sets': {
-                'all': {
-                    'scrapes': {
-                        # Yahoo_Quote: {'all': {},},
-                        # Yahoo_Chart: {'all': {},},
-                        # Finviz_Ticker_News: {'all': {},},
-                        Polygon_News: {'all': {},},
-                    },
-                },
-            },
-        },
-        'update_us_symbols': {
-            'info': 'update all scrapes that have symbols data to download',
             'sets': {
                 'all': {
                     'scrapes': {
                         Yahoo_Quote: {'all': {},},
                         Yahoo_Chart: {'all': {},},
                         Finviz_Ticker_News: {'all': {},},
+                        Polygon_News: {'all': {},},
+                        File_Files: {'all': {},},
+                    },
+                },
+            },
+        },
+        'update_all': {
+            'info': 'update all scrapes',
+            'sets': {
+                'all': {
+                    'scrapes': {
+                        Yahoo_Quote: {'all': {},},
+                        Yahoo_Chart: {'all': {},},
+                        Finviz_Ticker_News: {'all': {},},
+                        Polygon_News: {'all': {},},
+                    },
+                },
+            },
+        },
+        'update_test': {
+            'info': 'scrapes update test',
+            'sets': {
+                'all': {
+                    'scrapes': {
+                        Yahoo_Chart: {'all': {},},
                     },
                 },
             },
@@ -115,7 +154,6 @@ class Catalog():
                     'scrapes': {
                         Yahoo_Quote: {
                             'defaultKeyStatistics': {
-                                'key_values': True,
                                 'column_settings': [
                                     ['trailingEps', 'trailingEps'],
                                     ['forwardEps', 'forwardEps'],
@@ -128,7 +166,6 @@ class Catalog():
                                 ],
                             },
                             'summaryDetail': {
-                                'key_values': True,
                                 'column_settings': [
                                     ['forwardPE', 'forwardPE_b'],
                                     ['trailingPE', 'trailingPE'],
@@ -136,7 +173,6 @@ class Catalog():
                                 ],
                             },
                             'financialData': {
-                                'key_values': True,
                                 'column_settings': [
                                     ['earningsGrowth', 'earningsGrowth'],
                                     ['revenueGrowth', 'revenueGrowth'],
@@ -144,7 +180,6 @@ class Catalog():
                                 ],
                             },
                             'earningsHistory': {
-                                'key_values': True,
                                 'column_settings': [
                                     ['history', 'history'],
                                 ],
@@ -157,7 +192,6 @@ class Catalog():
                     'scrapes': {
                         Yahoo_Chart: {
                             'table_reference': {
-                                'key_values': True,
                                 'column_settings': [
                                     ['chart', 'ref_name'],
                                 ],
@@ -167,119 +201,4 @@ class Catalog():
                 },
             },
         },
-        # 'test': {
-        #     'info': 'ticker earnings',
-        #     # 'post_procs': [[__dropParent]],
-        #     'sets': {
-        #         # 'test_set_a': {
-        #         #     # 'post_procs': [[__dropParent]],
-        #         #     'scrapes': {
-        #         #         Yahoo_Quote: {
-        #         #             'all': {
-        #         #                 'key_values': True,
-        #         #                 'column_settings': [
-        #         #                     ['all', ''],
-        #         #                 ],
-        #         #             },
-        #         #         },
-        #         #     },
-        #         # },
-        #         # 'test_set_c': {
-        #         #     # 'post_procs': [[__dropParent]],
-        #         #     'scrapes': {
-        #         #         FMP_Stocklist: {
-        #         #             'stocklist': {
-        #         #                 'key_values': True,
-        #         #                 'column_settings': [
-        #         #                     ['all', ''],
-        #         #                 ],
-        #         #             },
-        #         #         },
-        #         #     },
-        #         # },
-        #         # 'test_set_d': {
-        #         #     # 'post_procs': [[__dropParent]],
-        #         #     'scrapes': {
-        #         #         Polygon_Tickers: {
-        #         #             'tickers': {
-        #         #                 'key_values': True,
-        #         #                 'column_settings': [
-        #         #                     ['all', ''],
-        #         #                 ],
-        #         #             },
-        #         #         },
-        #         #     },
-        #         # },
-        #         # 'test_set_e': {
-        #         #     # 'post_procs': [[__dropParent]],
-        #         #     'scrapes': {
-        #         #         File_Files: {
-        #         #             'all': {
-        #         #                 'key_values': False,
-        #         #                 'column_settings': [
-        #         #                     ['all', ''],
-        #         #                 ],
-        #         #             },
-        #         #         },
-        #         #     },
-        #         # },
-        #         # 'test_set_f': {
-        #         #     # 'post_procs': [[__dropParent]],
-        #         #     'scrapes': {
-        #         #         Finviz_Ticker_News: {
-        #         #             'table_reference': {
-        #         #                 'key_values': True,
-        #         #                 'column_settings': [
-        #         #                     ['all', ''],
-        #         #                 ],
-        #         #             },
-        #         #         },
-        #         #     },
-        #         # },
-        #         # 'test_set_g': {
-        #         #     # 'post_procs': [
-        #         #     #     [
-        #         #     #         get_reference,
-        #         #     #         {
-        #         #     #             'scrapeClass': Yahoo_Chart,
-        #         #     #             'method': {
-        #         #     #             },
-        #         #     #         }
-        #         #     #     ],
-        #         #     # ],
-        #         #     'scrapes': {
-        #         #         Yahoo_Chart: {
-        #         #             'table_reference': {
-        #         #                 'key_values': True,
-        #         #                 'column_settings': [
-        #         #                     ['all', ''],
-        #         #                 ],
-        #         #             },
-        #         #         },
-        #         #     },
-        #         # },
-        #         # 'test_set_h': {
-        #         #     # 'post_procs': [
-        #         #     #     [
-        #         #     #         get_reference,
-        #         #     #         {
-        #         #     #             'scrapeClass': Yahoo_Chart,
-        #         #     #             'method': {
-        #         #     #             },
-        #         #     #         }
-        #         #     #     ],
-        #         #     # ],
-        #         #     'scrapes': {
-        #         #         Polygon_News: {
-        #         #             'table_reference': {
-        #         #                 'key_values': True,
-        #         #                 'column_settings': [
-        #         #                     ['all', ''],
-        #         #                 ],
-        #         #             },
-        #         #         },
-        #         #     },
-        #         # },
-        #     },
-        # },
     }

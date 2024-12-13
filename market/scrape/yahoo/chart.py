@@ -19,6 +19,9 @@ class Yahoo_Chart(Yahoo):
         self.logger.info('Yahoo:   Chart: update')
         self.logger.info('Yahoo:   Chart: symbols processing : %s' % len(key_values))
 
+        # backup first
+        self.db.backup()
+
         # create request arguments list
         requests_list = []
         now = datetime.now()

@@ -46,6 +46,7 @@ class Vault():
                 multi_chunks.append((log_queue, update_scrapers, key_values))
         
         # run scrapes in multi thread
+        if len(multi_chunks) == 0: return
         self.logger.info('Run scrapes in %s threads' % (len(multi_chunks)))
         log_queue = self.logger.handlers[0].queue
         processes = []

@@ -60,7 +60,7 @@ class Market():
         self.log_queue.close()
 
     def get_us_market_symbols(self, update=False):
-        test = self.vault.get_data(['symbols'], update=update)['symbols']
+        test = self.vault.get_data(['us_symbols'], update=update)['symbols']
         
         symbols = set()
         
@@ -90,11 +90,18 @@ class Market():
         
         return symbols
 
-    def update_us_market_symbols(self):
-        symbols = self.get_us_market_symbols(update=True)
-        self.vault.update(['update_us_symbols'], symbols)
+    def get_scrape_symbols(self):
+        data_symbols = self.vault.get_data(['symbols'])['symbols']
+        symbols = {}
+        for scrape_name, scrape_symbols in data_symbols.items():
+            scrape_symbols = list(scrape_symbols.keys())
+            scrape_symbols.sort()
+            symbols[scrape_name] = scrape_symbols
+        return symbols
     
-    def update_all(self):
-        symbols = self.get_us_market_symbols()
-        print(len(symbols))
-        self.vault.update(['update_all'],symbols)
+    def update_nightly(self, symbols=[]):
+        if len(symbols) == 0:
+            scrape_symbols = self.get_scrape_symbols()
+            symbols = list(set(scrape_symbols['Yahoo_Chart']).union(set(scrape_symbols['Yahoo_Quote'])))
+            symbols.sort()
+        self.vault.update(['update_nightly'],symbols)
