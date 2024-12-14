@@ -60,29 +60,28 @@ class Market():
         self.log_queue.close()
 
     def get_us_market_symbols(self, update=False):
-        test = self.vault.get_data(['us_symbols'], update=update)['symbols']
-        
+        symbols_data = self.vault.get_data(['us_symbols'], update=update)['us_symbols']
+
         symbols = set()
         
         # get us acronyms
         acronyms_us = set()
-        for iso_entry in test['iso']:
+        for iso_entry in symbols_data['iso']:
             if 'cc' in iso_entry and iso_entry['cc'] == 'US':
                 if 'acronym' in iso_entry: acronyms_us.add(iso_entry['acronym'])
-        for iso_entry in test['iso']:
+        for iso_entry in symbols_data['iso']:
             if 'acronym' in iso_entry and iso_entry['acronym'] in acronyms_us:
                 if iso_entry['cc'] != 'US':
                     acronyms_us.remove(iso_entry['acronym'])
 
         # get stocklist symbols with acronym in us
-        for symbol, symbol_data in test['symbols']['stocklist'].items():
+        for symbol, symbol_data in symbols_data['symbols']['stocklist'].items():
             if 'acronym' in symbol_data and symbol_data['acronym'] in acronyms_us: symbols.add(symbol)
         
         # get tickers symbols with locale us
-        for symbol, symbol_data in test['symbols']['tickers'].items():
+        for symbol, symbol_data in symbols_data['symbols']['tickers'].items():
             # dont want these
             if symbol_data['market'] in {'crypto', 'fx'}: continue
-
             if 'locale' in symbol_data and symbol_data['locale'] == 'us': symbols.add(symbol)
         
         symbols = list(symbols)
@@ -94,17 +93,16 @@ class Market():
         data_symbols = self.vault.get_data(['symbols'])['symbols']
         symbols = {}
         for scrape_name, scrape_symbols in data_symbols.items():
-            scrape_symbols = list(scrape_symbols.keys())
-            scrape_symbols.sort()
-            symbols[scrape_name] = scrape_symbols
+            symbols[scrape_name] = sorted(scrape_symbols.keys())
         return symbols
     
     def update_nightly(self, symbols=[]):
         if len(symbols) == 0:
             scrape_symbols = self.get_scrape_symbols()
             # TODO: Probably get_us_market_symbols if no symbols found
-            symbols = list(set(scrape_symbols['Yahoo_Chart']).union(set(scrape_symbols['Yahoo_Quote'])))
-            symbols.sort()
+            symbols = set(scrape_symbols['yahoo_chart'])
+            symbols.update(scrape_symbols['yahoo_quote'])
+            symbols = sorted(symbols)
         else:
             symbols = [symbol.upper() for symbol in symbols]
         self.vault.update(['update_nightly'],symbols)

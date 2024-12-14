@@ -21,7 +21,8 @@ class Tickers():
 
     def get_news(self):
         # get all available news for tickers
-        news = self.vault.get_data(['reference_test'], self.symbols)['reference_test']
-        # pp(news)
+        news = self.vault.get_data(['news'], self.symbols)['reference_test']
+        print(len(news['AAPL']['news_finviz']))
+        print(len(news['AAPL']['news_polygon']))
 
     # TODO: add __str__

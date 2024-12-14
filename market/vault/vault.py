@@ -31,7 +31,7 @@ class Vault():
                     for scraper_class, scraper_data in test_set_data['scrapes'].items():
                         for sub_class, scraper_class_data in scraper_classes_data.items():
                             if issubclass(scraper_class, sub_class):
-                                scraper_class_data.append((scraper_class, list(scraper_data.keys())))
+                                scraper_class_data.append((scraper_class, list(scraper_data['tables'].keys())))
         multi_chunks = []
         log_queue = self.logger.handlers[0].queue
         for sub_class, scraper_classes in scraper_classes_data.items():
@@ -78,17 +78,20 @@ class Vault():
         if update : self.update(catalogs, key_values)
 
         main_data = {}
-        for catalog in catalogs:
-            catalog_data =  self.catalog.get_catalog(catalog)
+        for catalog_name in catalogs:
+            catalog_data =  self.catalog.get_catalog(catalog_name)
 
             sets_data = {}
             for set_name , set_data in catalog_data['sets'].items():
-                # handle sets
-                tables_data = {}
+                # handle scrapes
+                scrapes_data = {}
                 for scrape_class, scrape_data in set_data['scrapes'].items():
-                    # handle scrapes
                     db = self.get_scrape_database(scrape_class)
-                    for table_name, table_data in scrape_data.items():
+                    scrape_name = db.name
+
+                    # handle tables
+                    tables_data = {}
+                    for table_name, table_data in scrape_data['tables'].items():
                         scrape_table_names = scrape_class.get_table_names(table_name)
                         for table_name in scrape_table_names:
                             # handle table names
@@ -139,23 +142,36 @@ class Vault():
 
                             if len(make_data) > 0:
                                 tables_data[table_name] = make_data
-                
-                # run sets post procs
+                    
+                    # run tables post procs
+                    if 'post_procs' in scrape_data:
+                        for proc_entry in scrape_data['post_procs']:
+                            proc = proc_entry[0]
+                            proc_params = proc_entry[1]
+                            proc_params['db'] = db
+                            tables_data = proc(self, tables_data, **proc_params)
+                            # sets_data[set_name] = proc(self, tables_data, **proc_params)
+                    
+                    scrapes_data[scrape_name] = tables_data
+
+                # run scrapes post procs
                 if 'post_procs' in set_data:
                     for proc_entry in set_data['post_procs']:
                         proc = proc_entry[0]
                         proc_params = proc_entry[1]
-                        tables_data = proc(self, tables_data, **proc_params)
+                        scrapes_data = proc(self, scrapes_data, **proc_params)
                         # sets_data[set_name] = proc(self, tables_data, **proc_params)
-                sets_data[set_name] = tables_data
                 
-            # run set catalogs post procs
+                sets_data[set_name] = scrapes_data
+                
+            # run sets post procs
             if 'post_procs' in catalog_data:
                 for procEntry in catalog_data['post_procs']:
                     proc = procEntry[0]
                     procParams = procEntry[1]
                     sets_data = proc(self, sets_data, **procParams)
-            main_data[catalog] = sets_data
+            
+            main_data[catalog_name] = sets_data
         
         self.close_all_scrape_databases()
         return main_data

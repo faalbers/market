@@ -11,7 +11,7 @@ class Catalog():
         return {}
 
     @staticmethod
-    def merge(self, data, allow_collision=False):
+    def merge(self, data, db=None, allow_collision=False):
         merge_types = set()
         for merge_name, merge_data in data.items():
             merge_types.add(type(merge_data))
@@ -39,38 +39,54 @@ class Catalog():
         return data
     
     @staticmethod
-    def reference(self, data, table_reference):
-        data_reference = {}
-        for key_value, reference_data in data[table_reference].items():
-            print(key_value)
-            print(reference_data)
+    def reference(self, data, db, timestamps_table=None):
+        referenced_data = {}
+        for table_reference, reference_data in data.items():
+            for key_value, key_table_reference in reference_data.items():
+                referenced_data[key_value] = {}
+                for reference_name, reference_table in key_table_reference.items():
+                    if timestamps_table:
+                        timestamps = db.table_read(reference_table).keys()
+                        referenced_data[key_value][reference_name] = db.table_read(timestamps_table, key_values=timestamps)
+                    else:
+                        referenced_data[key_value][reference_name] = db.table_read(reference_table)
+        return referenced_data
 
-    
+    @staticmethod
+    def test_proc(self, data, db=None):
+        print(db)
+        pp(data.keys())
+        return data
+
     catalog = {
         'symbols': {
             'info': 'get all symbols in our scrapes',
-            # 'post_procs': [[merge, {}]],
+            'post_procs': [[merge, {}]],
             'sets': {
                 'Yahoo_Quote': {
-                    'post_procs': [[merge, {'allow_collision': True}]],
                     'scrapes': {
                         Yahoo_Quote: {
-                            'all': {
-                                'column_settings': [
-                                    ['symbol', 'symbol'],
-                                ],
+                            'post_procs': [[merge, {'allow_collision': True}]],
+                            'tables': {
+                                'all': {
+                                    'column_settings': [
+                                        ['symbol', 'symbol'],
+                                    ],
+                                },
                             },
                         },
                     },
                 },
                 'Yahoo_Chart': {
-                    'post_procs': [[merge, {}]],
                     'scrapes': {
                         Yahoo_Chart: {
-                            'table_reference': {
-                                'column_settings': [
-                                    ['symbol', 'symbol'],
-                                ],
+                            'post_procs': [[merge, {}]],
+                            'tables': {
+                                'table_reference': {
+                                    'column_settings': [
+                                        ['symbol', 'symbol'],
+                                    ],
+                                },
                             },
                         },
                     },
@@ -82,21 +98,25 @@ class Catalog():
             # 'post_procs': [[merge, {}]],
             'sets': {
                 'symbols': {
-                    # 'post_procs': [[merge, {}]],
+                    'post_procs': [[merge, {}]],
                     'scrapes': {
                         FMP_Stocklist: {
-                            'stocklist': {
-                                'column_settings': [
-                                    ['exchangeShortName', 'acronym'],
-                                ],
+                            'tables': {
+                                'stocklist': {
+                                    'column_settings': [
+                                        ['exchangeShortName', 'acronym'],
+                                    ],
+                                },
                             },
                         },
                         Polygon_Tickers: {
-                            'tickers': {
-                                'column_settings': [
-                                    ['locale', 'locale'],
-                                    ['market', 'market'],
-                                ],
+                            'tables': {
+                                'tickers': {
+                                    'column_settings': [
+                                        ['locale', 'locale'],
+                                        ['market', 'market'],
+                                    ],
+                                },
                             },
                         },
                     },
@@ -105,11 +125,14 @@ class Catalog():
                     'post_procs': [[merge, {}]],
                     'scrapes': {
                         File_Files: {
-                            'ISO10383_MIC': {
-                                'column_settings': [
-                                    ['ACRONYM', 'acronym'],
-                                    ['ISO COUNTRY CODE (ISO 3166)', 'cc'],
-                                ],
+                            'post_procs': [[merge, {}]],
+                            'tables': {
+                                'ISO10383_MIC': {
+                                    'column_settings': [
+                                        ['ACRONYM', 'acronym'],
+                                        ['ISO COUNTRY CODE (ISO 3166)', 'cc'],
+                                    ],
+                                },
                             },
                         },
                     },
@@ -121,11 +144,11 @@ class Catalog():
             'sets': {
                 'all': {
                     'scrapes': {
-                        Yahoo_Quote: {'all': {},},
-                        Yahoo_Chart: {'all': {},},
-                        Finviz_Ticker_News: {'all': {},},
-                        Polygon_News: {'all': {},},
-                        File_Files: {'all': {},},
+                        Yahoo_Quote: {'tables': {'all': {},}},
+                        Yahoo_Chart: {'tables': {'all': {},}},
+                        Finviz_Ticker_News: {'tables': {'all': {},}},
+                        Polygon_News: {'tables': {'all': {},}},
+                        File_Files: {'tables': {'all': {},}},
                     },
                 },
             },
@@ -135,111 +158,38 @@ class Catalog():
             'sets': {
                 'all': {
                     'scrapes': {
-                        Yahoo_Quote: {'all': {},},
-                        Yahoo_Chart: {'all': {},},
-                        Finviz_Ticker_News: {'all': {},},
+                        Yahoo_Quote: {'tables': {'all': {},}},
+                        Yahoo_Chart: {'tables': {'all': {},}},
+                        Finviz_Ticker_News: {'tables': {'all': {},}},
                     },
                 },
             },
         },
-        'update_all': {
-            'info': 'update all scrapes',
-            'sets': {
-                'all': {
-                    'scrapes': {
-                        Yahoo_Quote: {'all': {},},
-                        Yahoo_Chart: {'all': {},},
-                        Finviz_Ticker_News: {'all': {},},
-                        Polygon_News: {'all': {},},
-                    },
-                },
-            },
-        },
-        'reference_test': {
-            'info': 'referencing test',
-            'sets': {
-                'chart': {
-                    'post_procs': [
-                        [reference,
-                            {
-                                'table_reference': 'table_reference',
-                            }
-                        ],
-                    ],
-                    'scrapes': {
-                        Yahoo_Chart: {
-                            'table_reference': {
-                                'column_settings': [
-                                    ['chart', 'chart'],
-                                ],
-                            },
-                        },
-                    },
-                },
-                # 'news': {
-                #     'post_procs': [[reference, {}]],
-                #     'scrapes': {
-                #         Polygon_News: {
-                #             'table_reference': {
-                #                 'column_settings': [
-                #                     ['news', 'news'],
-                #                 ],
-                #             },
-                #         },
-                #     },
-                # },
-            },
-        },
-        'statistics': {
-            'info': 'catalog test',
+        'news': {
+            'info': 'news data',
             'post_procs': [[merge, {}]],
             'sets': {
-                'test': {
+                'news': {
                     'post_procs': [[merge, {}]],
                     'scrapes': {
-                        Yahoo_Quote: {
-                            'defaultKeyStatistics': {
-                                'column_settings': [
-                                    ['trailingEps', 'trailingEps'],
-                                    ['forwardEps', 'forwardEps'],
-                                    ['forwardPE', 'forwardPE_a'],
-                                    ['beta', 'beta'],
-                                    ['beta3Year', 'beta3Year'],
-                                    ['pegRatio', 'pegRatio'],
-                                    ['yield', 'yield'],
-                                    ['sharesOutstanding', 'sharesOutstanding'],
-                                ],
-                            },
-                            'summaryDetail': {
-                                'column_settings': [
-                                    ['forwardPE', 'forwardPE_b'],
-                                    ['trailingPE', 'trailingPE'],
-                                    ['trailingAnnualDividendRate', 'ttmDividendRate'],
-                                ],
-                            },
-                            'financialData': {
-                                'column_settings': [
-                                    ['earningsGrowth', 'earningsGrowth'],
-                                    ['revenueGrowth', 'revenueGrowth'],
-                                    ['revenuePerShare', 'revenuePerShare'],
-                                ],
-                            },
-                            'earningsHistory': {
-                                'column_settings': [
-                                    ['history', 'history'],
-                                ],
+                        Finviz_Ticker_News: {
+                            'post_procs': [[reference, {}]],
+                            'tables': {
+                                'table_reference': {
+                                    'column_settings': [
+                                        ['news', 'news_finviz'],
+                                    ],
+                                },
                             },
                         },
-                    },
-                },
-                'test_b': {
-                    'post_procs': [[merge, {}]],
-                    'scrapes': {
-                        Yahoo_Chart: {
-                            'table_reference': {
-                                'column_settings': [
-                                    ['chart', 'ref_name'],
-                                ],
+                        Polygon_News: {
+                            'post_procs': [[reference, {'timestamps_table': 'news_articles'}]],
+                            'tables': {
+                                'table_reference': {
+                                    'column_settings': [
+                                        ['news', 'news_polygon'],
+                                    ],
+                                },
                             },
                         },
                     },
