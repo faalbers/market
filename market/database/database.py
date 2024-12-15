@@ -308,10 +308,14 @@ class Database():
         cursor.close()
         return names
 
-    def get_table_column_names(self, tableName):
-        if not self.table_exists(tableName): return []
+    def get_table_column_names(self, table_name):
+        if not self.table_exists(table_name): return []
         cursor = self.connection.cursor()
-        tableInfo = cursor.execute("PRAGMA table_info(%s)" % tableName).fetchall()
+        table_info = cursor.execute("PRAGMA table_info(%s)" % table_name).fetchall()
         cursor.close()
-        return [x[1] for x in tableInfo]
+        return [x[1] for x in table_info]
 
+    def table_drop(self, table_name):
+        cursor = self.connection.cursor()
+        cursor.execute("DROP TABLE IF EXISTS '%s'" % table_name)
+        cursor.close()

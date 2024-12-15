@@ -107,6 +107,9 @@ class Market():
             symbols = [symbol.upper() for symbol in symbols]
         self.vault.update(['update_nightly'],symbols)
 
+    def update_test(self, symbols=[]):
+        self.vault.update(['update_test'],symbols)
+
     def update_symbols(self, symbols):
         symbols = [symbol.upper() for symbol in symbols]
         self.vault.update(['update_symbols'],symbols)

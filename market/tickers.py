@@ -21,8 +21,20 @@ class Tickers():
 
     def get_news(self):
         # get all available news for tickers
-        news = self.vault.get_data(['news'], self.symbols)['reference_test']
-        print(len(news['AAPL']['news_finviz']))
-        print(len(news['AAPL']['news_polygon']))
+        news = self.vault.get_data(['news'], self.symbols)['news']
+        
+        symbols_news = {}
+        for news_name, news_data in news.items():
+            for symbol, ts_data in news_data.items():
+                if not symbol in symbols_news:
+                    symbols_news[symbol] = ts_data
+                else:
+                    symbols_news[symbol] = {**symbols_news[symbol], **ts_data}
+        for symbol, ts_data in symbols_news.items():
+            symbols_news[symbol] = pd.DataFrame(ts_data).T
+            symbols_news[symbol].index = pd.to_datetime(symbols_news[symbol].index, unit='s')
+            symbols_news[symbol].sort_index(inplace=True)
+
+        return symbols_news
 
     # TODO: add __str__

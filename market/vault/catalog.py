@@ -1,5 +1,9 @@
 from ..scrape import *
+from ..database import Database
 from pprint import pp
+import pandas as pd
+from multiprocessing import Pool
+import math
 
 class Catalog():
     def __init__(self):
@@ -39,19 +43,41 @@ class Catalog():
         return data
     
     @staticmethod
-    def reference(self, data, db, timestamps_table=None):
-        referenced_data = {}
-        for table_reference, reference_data in data.items():
-            for key_value, key_table_reference in reference_data.items():
-                referenced_data[key_value] = {}
-                for reference_name, reference_table in key_table_reference.items():
-                    if timestamps_table:
-                        timestamps = db.table_read(reference_table).keys()
-                        referenced_data[key_value][reference_name] = db.table_read(timestamps_table, key_values=timestamps)
-                    else:
-                        referenced_data[key_value][reference_name] = db.table_read(reference_table)
-        return referenced_data
+    def reference_multi(params):
+        key_table_reference = params[0]
+        db_name = params[1]
+        db = Database(db_name)
+        data = {}
+        for key_value, table_name in key_table_reference.items():
+            data[key_value] = db.table_read(table_name)
+        return data
 
+    @staticmethod
+    def reference(self, data, db, timestamps_table=None):
+        # get referenced tables for key value
+        cpus = 8
+        new_data = {}
+        for table_reference, reference_data in data.items():
+            reference_df = pd.DataFrame(reference_data).T
+            for reference_name, reference_tables in reference_df.items():
+                # make a dataframe to easily chunk it for multiprocessing
+                reference_data = {}
+                if reference_tables.shape[0] > 105:
+                    # only multiprocessing if more the 105 references
+                    chunk_size = math.ceil(reference_tables.shape[0] / cpus)
+                    chunks = [(reference_tables.iloc[i:i+chunk_size], db.name) for i in range(0, reference_tables.shape[0], chunk_size)]
+                    with Pool(processes=cpus) as pool:
+                        results = pool.map(Catalog.reference_multi, chunks)
+                        for result in results:
+                            for key_value, key_table_reference in result.items():
+                                reference_data[key_value] = key_table_reference
+                else:
+                    # handle serial processing
+                    for key_value, key_table_reference in reference_tables.items():
+                        reference_data[key_value] = db.table_read(key_table_reference)
+                new_data[reference_name] = reference_data
+        return new_data
+    
     @staticmethod
     def test_proc(self, data, db=None):
         print(db)
@@ -139,6 +165,16 @@ class Catalog():
                 },
             },
         },
+        'update_test': {
+            'info': 'update all scrapes',
+            'sets': {
+                'all': {
+                    'scrapes': {
+                        Polygon_News: {'tables': {'all': {},}},
+                    },
+                },
+            },
+        },
         'update_nightly': {
             'info': 'update all scrapes',
             'sets': {
@@ -183,7 +219,8 @@ class Catalog():
                             },
                         },
                         Polygon_News: {
-                            'post_procs': [[reference, {'timestamps_table': 'news_articles'}]],
+                            # 'post_procs': [[reference, {'timestamps_table': 'news_articles'}]],
+                            'post_procs': [[reference, {}]],
                             'tables': {
                                 'table_reference': {
                                     'column_settings': [
