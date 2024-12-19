@@ -85,6 +85,27 @@ class Catalog():
         return data
 
     catalog = {
+        'profile': {
+            'info': 'get all symbols in our scrapes',
+            'post_procs': [[merge, {}]],
+            'sets': {
+                'Yahoo_Quote': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        Yahoo_Quote: {
+                            'post_procs': [[merge, {}]],
+                            'tables': {
+                                'quoteType': {
+                                    'column_settings': [
+                                        ['longName', 'name'],
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
         'symbols': {
             'info': 'get all symbols in our scrapes',
             'post_procs': [[merge, {}]],

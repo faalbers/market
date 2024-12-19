@@ -68,6 +68,7 @@ class Database():
             shutil.copyfile(filename, filename_backup)
             logger = logging.getLogger("vault_multi")
             logger.info(f"File backup from {filename} to {filename_backup}")
+
         except FileNotFoundError:
             pass
 
