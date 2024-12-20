@@ -85,6 +85,27 @@ class Catalog():
         return data
 
     catalog = {
+        'price': {
+            'info': 'price info',
+            'post_procs': [[merge, {}]],
+            'sets': {
+                'Yahoo_Quote': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        Yahoo_Quote: {
+                            'post_procs': [[merge, {}]],
+                            'tables': {
+                                'price': {
+                                    'column_settings': [
+                                        ['regularMarketPrice', 'price'],
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
         'profile': {
             'info': 'get all symbols in our scrapes',
             'post_procs': [[merge, {}]],

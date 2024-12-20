@@ -187,3 +187,7 @@ class Quicken():
 
         return accounts
     
+    def get_securities(self):
+        securities = pd.DataFrame(self.qif.securities)
+        return securities
+
