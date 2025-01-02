@@ -85,6 +85,27 @@ class Catalog():
         return data
 
     catalog = {
+        'chart': {
+            'info': 'chart info',
+            'post_procs': [[merge, {}]],
+            'sets': {
+                'Yahoo_Chart': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        Yahoo_Chart: {
+                            'post_procs': [[reference, {}]],
+                            'tables': {
+                                'table_reference': {
+                                    'column_settings': [
+                                        ['chart', 'chart'],
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
         'price': {
             'info': 'price info',
             'post_procs': [[merge, {}]],

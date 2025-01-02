@@ -3,6 +3,7 @@ import logging
 from ...database import Database
 from pprint import pp
 import pandas as pd
+from ...utils import stop_text
 
 class Finviz_Ticker_News(Finviz):
     dbName = 'finviz_ticker_news'
@@ -28,10 +29,16 @@ class Finviz_Ticker_News(Finviz):
         symbols_done = 0
         for symbol in key_values:
             if (symbols_done % 100) == 0:
+                self.db.commit()
                 self.logger.info('Finviz:  symbols still to do: %s' % (len(key_values) - symbols_done))
             self.request_news(symbol)
             # break
             symbols_done += 1
+            if stop_text():
+                self.logger.info('Finviz:  manually stopped request')
+                self.logger.info('Finviz:  symbols done       : %s' % symbols_done)
+                self.db.commit()
+                break
 
         self.logger.info('Finviz:  Finviz_Ticker_News update done')
 

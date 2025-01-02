@@ -4,6 +4,7 @@ from dateutil.relativedelta import relativedelta
 from ratelimit import limits, sleep_and_retry
 from . import const
 from pprint import pp
+from ...utils import stop_text
 
 class Yahoo():
     def __init__(self):
@@ -74,4 +75,8 @@ class Yahoo():
                 self.logger.info('Yahoo:   %s: status code: %s' % (symbol, response.status_code))
                 self.logger.info('Yahoo:   %s: content type: %s' % (symbol, response.headers.get('content-type')))
             count_done += 1
-        self.logger.info('Yahoo:   done: %s , failed: %s' % (len(requests_list), failed_total))
+            if stop_text():
+                self.logger.info('Yahoo:   manually stopped multi_request')
+                self.db.commit()
+                break
+        self.logger.info('Yahoo:   done: %s , failed: %s' % (count_done, failed_total))

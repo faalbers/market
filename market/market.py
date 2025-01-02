@@ -1,5 +1,6 @@
 import logging.handlers
 import multiprocessing, logging
+from .tickers import Tickers
 from .vault import Vault
 import sys, traceback
 from pprint import pp
@@ -7,6 +8,8 @@ from .database import Database
 import pandas as pd
 from langchain_ollama import OllamaLLM
 from .utils import stop_text
+from .analysis import Analysis
+from .quicken import Quicken
 
 class Market():
     @staticmethod 
@@ -63,7 +66,16 @@ class Market():
         sys.excepthook = self.builtin_excepthook
         self.log_queue.close()
 
-    def get_us_market_symbols(self, update=False):
+    def get_analysis(self, symbols):
+        return Analysis(symbols)
+    
+    def get_tickers(self, symbols):
+        return Tickers(symbols)
+    
+    def get_quicken(self, file_name):
+        return Quicken(file_name)
+    
+    def get_us_market_tickers(self, update=False):
         symbols_data = self.vault.get_data(['us_symbols'], update=update)['us_symbols']
 
         symbols = set()
@@ -88,28 +100,21 @@ class Market():
             if symbol_data['market'] in {'crypto', 'fx'}: continue
             if 'locale' in symbol_data and symbol_data['locale'] == 'us': symbols.add(symbol)
         
-        symbols = list(symbols)
-        symbols.sort()
-        
-        return symbols
+        return Tickers(symbols)
 
-    def get_scrape_symbols(self):
+    def get_scraped_tickers(self):
         data_symbols = self.vault.get_data(['symbols'])['symbols']
-        symbols = {}
+        symbols = set()
         for scrape_name, scrape_symbols in data_symbols.items():
-            symbols[scrape_name] = sorted(scrape_symbols.keys())
-        return symbols
+            # for now only get yahoo_chart and yahoo_quote symbols
+            symbols.update(scrape_symbols.keys())
+        return Tickers(symbols)
     
-    def update_nightly(self, symbols=[]):
-        if len(symbols) == 0:
-            scrape_symbols = self.get_scrape_symbols()
-            # TODO: Probably get_us_market_symbols if no symbols found
-            symbols = set(scrape_symbols['yahoo_chart'])
-            symbols.update(scrape_symbols['yahoo_quote'])
-            symbols = sorted(symbols)
-        else:
-            symbols = [symbol.upper() for symbol in symbols]
-        self.vault.update(['update_nightly'],symbols)
+    def update_nightly(self, tickers=None):
+        if not tickers or tickers.count == 0:
+            # TODO: Probably get_us_market_tickers if no symbols found
+            tickers = self.get_scraped_tickers()
+        self.vault.update(['update_nightly'],tickers.get_symbols())
 
     def update_test(self, symbols=[]):
         self.vault.update(['update_test'],symbols)

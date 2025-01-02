@@ -2,6 +2,7 @@ import requests
 from database.keys import KEYS
 from ratelimit import limits, sleep_and_retry
 from pprint import pp
+from ...utils import stop_text
 
 class Polygon():
     def __init__(self):
@@ -18,6 +19,7 @@ class Polygon():
     def session_get(self, request_arguments):
         return self.session.get(**request_arguments)
     
+    # handle requests till they are exhausted
     def request(self, request_arguments, push_proc):
         next_request_arguments = request_arguments
         entries = 0
@@ -40,6 +42,13 @@ class Polygon():
                     next_request_arguments = {'url': response_data['next_url']}
             else:
                 next_request_arguments = None
+            
+            if stop_text():
+                self.logger.info('Polygon: manually stopped request')
+                self.logger.info('Polygon: entries found: %s' % entries)
+                self.db.commit()
+                next_request_arguments = None
+                
             # print(next_request_arguments)
             # runs -= 1
             # if runs == 0:
