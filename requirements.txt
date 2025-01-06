@@ -2,3 +2,7 @@ requests>=2.32.3
 python-dateutil>=2.9.0.post0
 ratelimit>=2.2.1
 numpy==1.26.4
+finvizfinance>=1.1.0
+langchain-ollama>=0.2.1
+matplotlib>=3.10.0
+fredapi>=0.5.2

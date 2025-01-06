@@ -23,7 +23,7 @@ class Vault():
 
     def update(self, catalogs=[], key_values=[]):
         # gather scrape classes
-        scraper_classes_data = {Yahoo: [], FMP: [], Polygon: [], File: [], Finviz: []}
+        scraper_classes_data = {Yahoo: [], FMP: [], Polygon: [], File: [], Finviz: [], Fred: []}
         for catalog in catalogs:
             catalog_data =  self.catalog.get_catalog(catalog)
             if len(catalog_data) > 0:

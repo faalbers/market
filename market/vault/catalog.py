@@ -247,6 +247,7 @@ class Catalog():
                         Yahoo_Chart: {'tables': {'all': {},}},
                         Finviz_Ticker_News: {'tables': {'all': {},}},
                         Polygon_News: {'tables': {'all': {},}},
+                        Fred: {'tables': {'all': {},}},
                         File_Files: {'tables': {'all': {},}},
                     },
                 },
