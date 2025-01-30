@@ -66,7 +66,7 @@ class Yahoo():
                 failed = 0
             response = self.session_get(request_arguments)
             if response.headers.get('content-type').startswith('application/json'):
-                found = self.pushAPIData(symbol, response.json())
+                found = self.push_api_data(symbol, response.json(), request_arguments)
                 if not found:
                     failed += 1
                     failed_total += 1

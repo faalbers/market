@@ -1,12 +1,15 @@
 from ..tickers import Tickers
 from ..viz import Viz
 import pandas as pd
+from pprint import pp
+from ..vault import Vault
 
 class Analysis():
     def __init__(self, symbols):
         self.tickers = Tickers(symbols)
         self.benchmarks = Tickers(['SPY', 'QQQ'])
         self.viz = Viz()
+        self.vault = Vault()
         
     def news_sentiment(self):
         start_date = '2023-01-01'
@@ -43,3 +46,15 @@ class Analysis():
                 
                 test_df[symbol] = df_data
         self.viz.plot_timeseries(test_df)
+
+    def revenue_growth(self):
+        # all_tickers = self.tickers.get_all()
+        # self.viz.data_keys_text(all_tickers, rename_set=set(self.tickers.get_symbols()), rename_to='symbol')
+        
+        # all_other = self.vault.get_data(['all_other'])['all_other']
+        # self.viz.data_keys_text(all_other, file_name='data_other_keys')
+
+        revenue = self.tickers.get_revenue_growth()
+        pp(revenue.keys())
+
+

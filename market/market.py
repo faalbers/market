@@ -10,6 +10,7 @@ from langchain_ollama import OllamaLLM
 from .utils import stop_text
 from .analysis import Analysis
 from .quicken import Quicken
+from .report import Report
 
 class Market():
     @staticmethod 
@@ -218,3 +219,12 @@ class Market():
         if stop_text():
             self.logger.info('Market: Updating news sentiment manually stopped')
 
+    def make_porfolios_report(self):
+        quicken = self.get_quicken('database/2020.QIF')
+        portfolios = quicken.get_portfolios()
+        for portfolio in portfolios:
+            report_name = portfolio.name.replace(' ', '_') + '_report'
+            report = Report(report_name)
+            
+            portfolio.add_report(report)
+            report.buildDoc()

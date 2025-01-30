@@ -14,6 +14,8 @@ class Fred():
 
     @staticmethod
     def get_table_names(table_name):
+        if table_name == 'all':
+            return ['fred']
         return [table_name]
 
     def __init__(self, key_values=[], table_names=[]):

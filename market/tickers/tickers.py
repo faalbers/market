@@ -23,14 +23,28 @@ class Tickers():
     def get_symbols(self):
         return sorted(self.symbols)
 
-    def get_chart(self, start_date, end_date, update=False):
-        chart_data = self.vault.get_data(['chart'], self.symbols, update=update)['chart']['chart']
+    def get_profiles(self, update=False):
+        return self.vault.get_data(['profile'], self.symbols, update=update)['profile']
+
+    def get_chart(self, start_date=None, end_date=None, update=False):
+        chart_data = self.vault.get_data(['chart'], self.symbols, update=update)['chart']
+        if 'chart' in chart_data:
+            chart_data = chart_data['chart']
+        else:
+            chart_data = {}
+
         chart = {}
         for symbol, ts_data in chart_data.items():
             df = pd.DataFrame(ts_data).T
             df.index = pd.to_datetime(df.index, unit='s')
             df.sort_index(inplace=True)
-            chart[symbol] = df.loc[start_date:end_date]
+            df.index = df.index.floor('D') # set it to beginning of day
+            df = df.drop('timestamp', axis=1)
+            if start_date:
+                df = df.loc[start_date:]
+            if end_date:
+                df = df.loc[:end_date]
+            chart[symbol] = df
         return chart
         
     def get_news(self):
@@ -58,5 +72,14 @@ class Tickers():
             news_sentiment[symbol] = news_data['sentiment_llama'].loc[start_date:end_date]
             news_sentiment[symbol].name = 'news_sentiment'
         return news_sentiment
+    
+    def get_all(self):
+        return self.vault.get_data(['all_tickers'], self.symbols)['all_tickers']
+
+    def get_revenue_growth(self):
+        return self.vault.get_data(['revenue_growth'], self.symbols)['revenue_growth']
+    
+    def update(self, catalogs):
+        self.vault.update(catalogs, self.symbols)
     
     # TODO: add __str__

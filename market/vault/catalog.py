@@ -16,6 +16,7 @@ class Catalog():
 
     @staticmethod
     def merge(self, data, db=None, allow_collision=False):
+        if len(data) == 0: return data
         merge_types = set()
         for merge_name, merge_data in data.items():
             merge_types.add(type(merge_data))
@@ -243,12 +244,13 @@ class Catalog():
             'sets': {
                 'all': {
                     'scrapes': {
-                        Yahoo_Quote: {'tables': {'all': {},}},
-                        Yahoo_Chart: {'tables': {'all': {},}},
-                        Finviz_Ticker_News: {'tables': {'all': {},}},
-                        Polygon_News: {'tables': {'all': {},}},
-                        Fred: {'tables': {'all': {},}},
-                        File_Files: {'tables': {'all': {},}},
+                        # Yahoo_Quote: {'tables': {'all': {},}},
+                        # Yahoo_Chart: {'tables': {'all': {},}},
+                        Yahoo_Timeseries: {'tables': {'all': {},}},
+                        # Finviz_Ticker_News: {'tables': {'all': {},}},
+                        # Polygon_News: {'tables': {'all': {},}},
+                        # Fred: {'tables': {'all': {},}},
+                        # File_Files: {'tables': {'all': {},}},
                     },
                 },
             },
@@ -289,6 +291,145 @@ class Catalog():
                                 'table_reference': {
                                     'column_settings': [
                                         ['news', 'news_polygon'],
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        'all_tickers': {
+            'info': 'all info',
+            'sets': {
+                'Yahoo': { 'scrapes': {
+                        Yahoo_Quote: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
+                        Yahoo_Chart: {
+                            'post_procs': [[reference, {}]],
+                            'tables': { 'table_reference': { 'column_settings': [ ['chart', 'chart'], ], }, },
+                        },
+                    },
+                },
+                'FMP': { 'scrapes': {
+                        FMP_Stocklist: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
+                    },
+                },
+                'Polygon': { 'scrapes': {
+                        Polygon_Tickers: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
+                        Polygon_News: {
+                            'post_procs': [[reference, {}]],
+                            'tables': { 'table_reference': { 'column_settings': [ ['news', 'news_polygon'], ], }, },
+                        },
+                    },
+                },
+                'Finviz': { 'scrapes': {
+                        Finviz_Ticker_News: {
+                            'post_procs': [[reference, {}]],
+                            'tables': { 'table_reference': { 'column_settings': [ ['news', 'news_finviz'], ], }, },
+                        },
+                    },
+                },
+            },
+        },
+        'all_other': {
+            'info': 'all info',
+            'sets': {
+                'File': { 'scrapes': {
+                        File_Files: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
+                    },
+                },
+                'Fred': { 'scrapes': {
+                        Fred: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
+                    },
+                },
+            },
+        },
+        'revenue_growth': {
+            'info': 'get revenue data',
+            'post_procs': [[merge, {}]],
+            'sets': {
+                'Yahoo_Quote': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        Yahoo_Quote: {
+                            # 'post_procs': [[merge, {}]],
+                            'tables': {
+                                'financialData': {
+                                    'column_settings': [
+                                        ['revenueGrowth', 'revenueGrowth'],
+                                        ['revenuePerShare', 'revenuePerShare'],
+                                        ['totalRevenue', 'totalRevenue'],
+                                        ['earningsGrowth', 'earningsGrowth'],
+                                    ],
+                                },
+                                'incomeStatementHistory': {
+                                    'column_settings': [
+                                        ['incomeStatementHistory', 'incomeStatementHistory'],
+                                    ],
+                                },
+                                'incomeStatementHistoryQuarterly': {
+                                    'column_settings': [
+                                        ['incomeStatementHistory', 'incomeStatementHistory'],
+                                    ],
+                                },
+                                'calendarEvents': {
+                                    'column_settings': [
+                                        ['earnings', 'earnings'],
+                                    ],
+                                },
+                                'earnings': {
+                                    'column_settings': [
+                                        ['financialsChart', 'financialsChart'],
+                                    ],
+                                },
+                                'earningsTrend': {
+                                    'column_settings': [
+                                        ['trend', 'trend'],
+                                    ],
+                                },
+                                'indexTrend': {
+                                    'column_settings': [
+                                        ['estimates', 'estimates'],
+                                    ],
+                                },
+                                'defaultKeyStatistics': {
+                                    'column_settings': [
+                                        ['earningsQuarterlyGrowth', 'earningsQuarterlyGrowth'],
+                                    ],
+                                },
+                            },
+                        },
+                        Yahoo_Timeseries: {
+                            # 'post_procs': [[merge, {}]],
+                            'tables': {
+                                'annualTotalRevenue': {
+                                    'column_settings': [
+                                        ['all', ''],
+                                    ],
+                                },
+                                'quarterlyTotalRevenue': {
+                                    'column_settings': [
+                                        ['all', ''],
+                                    ],
+                                },
+                                'trailingTotalRevenue': {
+                                    'column_settings': [
+                                        ['all', ''],
+                                    ],
+                                },
+                                'annualOperatingRevenue': {
+                                    'column_settings': [
+                                        ['all', ''],
+                                    ],
+                                },
+                                'quarterlyOperatingRevenue': {
+                                    'column_settings': [
+                                        ['all', ''],
+                                    ],
+                                },
+                                'trailingOperatingRevenue': {
+                                    'column_settings': [
+                                        ['all', ''],
                                     ],
                                 },
                             },

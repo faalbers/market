@@ -43,8 +43,9 @@ class Yahoo_Chart(Yahoo):
 
         self.logger.info('Yahoo:   Chart: Yahoo_Chart update done')
 
-    def pushAPIData(self, symbol, response_data):
+    def push_api_data(self, symbol, response_data, request_arguments):
         symbol = symbol.upper()
+        chart_found = False
         if 'chart' in response_data:
             # handle API response
             response_data = response_data['chart']
@@ -110,7 +111,9 @@ class Yahoo_Chart(Yahoo):
 
                     # write table reference
                     self.db.table_write('table_reference', {symbol: {'chart': table_name}}, 'symbol', method='append')
-                    return True
+                    chart_found = True
 
-        return False
+        if not chart_found:
+            self.logger.info('Yahoo:   Chart: %s: chart not found' % symbol)
+        return chart_found
 

@@ -11,8 +11,9 @@ class File_Files(File):
 
     @staticmethod
     def get_table_names(table_name):
-        # if table_name == 'all':
-        #     return list(const.QUOTESUMMARY_MODULES.keys())
+        if table_name == 'all':
+            db = Database(File_Files.dbName)
+            return sorted(db.table_read('status_db', column_values=['table_name']).keys())
         return [table_name]
 
     def __init__(self, key_values=[], table_names=[]):

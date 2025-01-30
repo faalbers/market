@@ -10,8 +10,8 @@ class Polygon_Tickers(Polygon):
 
     @staticmethod
     def get_table_names(table_name):
-        # if table_name == 'all':
-        #     return list(const.QUOTESUMMARY_MODULES.keys())
+        if table_name == 'all':
+            return ['tickers']
         return [table_name]
 
     def __init__(self, key_values=[], table_names=[]):
@@ -19,7 +19,7 @@ class Polygon_Tickers(Polygon):
         super().__init__()
         self.db = Database(self.dbName)
 
-        # updated if longer then 60 half a year ago or initial version
+        # updated if longer then half a year ago or initial version
         status = self.db.table_read('status_db', key_values=['tickers'], column_values=['timestamp'])
         if status:
             if int((datetime.now() - relativedelta(months=6)).timestamp()) < status['tickers']['timestamp']: return

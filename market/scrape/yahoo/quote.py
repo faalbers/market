@@ -47,7 +47,7 @@ class Yahoo_Quote(Yahoo):
 
         self.logger.info('Yahoo:   Yahoo_Quote update done')
 
-    def pushAPIData(self, symbol, response_data):
+    def push_api_data(self, symbol, response_data, request_arguments):
         symbol = symbol.upper()
         response_data = response_data['quoteSummary']
         if response_data['error']:
