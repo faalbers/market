@@ -11,6 +11,7 @@ from .utils import stop_text
 from .analysis import Analysis
 from .quicken import Quicken
 from .report import Report
+from .portfolio import Portfolio
 
 class Market():
     @staticmethod 
@@ -228,3 +229,18 @@ class Market():
             
             portfolio.add_report(report)
             report.buildDoc()
+    
+    def make_portfolio(self):
+        Portfolio()
+        
+    # def statements(self):
+    #     # pdf_files = glob.glob('database/statements/*.pdf')
+    #     pdf_files = glob.glob('etrade_statements/trust/*.pdf')
+    #     for pdf_file in pdf_files:
+    #         statement = Statement(pdf_file)
+    #         print()
+    #         print(statement.pdf_file)
+    #         print(statement.date)
+    #         print(len(statement.lines))
+    #         found_lines = statement.find_lines(['E*TRADE', 'ETRADE', '1-800-ETRADE', 'Morgan Stanley', 'Fidelity', 'Customer Update:'])
+    #         print(found_lines)
