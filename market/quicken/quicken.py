@@ -2,7 +2,7 @@ from pprint import pp
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from ..portfolio import Portfolio
+from ..portfolio_old import Portfolio
 
 class QIF():
     def __init__(self, qif_file):

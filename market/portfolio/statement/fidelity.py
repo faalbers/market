@@ -3,8 +3,8 @@ from pprint import pp
 import math
 import pandas as pd
 
-class Morgan_Stanley_Private():
-    name = 'Morgan Stanley Private'
+class Fidelity():
+    name = 'Fidelity'
 
     def __init__(self, statement):
         self.statement = statement

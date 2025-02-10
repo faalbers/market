@@ -8,3 +8,5 @@ langchain-ollama>=0.2.1
 matplotlib>=3.10.0
 fredapi>=0.5.2
 reportlab>=4.2.5
+pypdf2>=3.0.1
+

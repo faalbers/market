@@ -39,5 +39,19 @@ class Statement():
         else:
             raise Exception(f'Page {page_num} not found: {self.pdf_file}')
     
+    def get_page_lines(self, page_num):
+        lines = []
+        for block in self.get_page_blocks(page_num):
+            lines += block
+        return lines
+    
     def get_blocks(self):
         return self.blocks
+
+    def get_lines(self):
+        lines = []
+        for page_num in sorted(self.blocks.keys()):
+            for block in self.blocks[page_num]:
+                lines += block
+
+        return lines

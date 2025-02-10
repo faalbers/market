@@ -4,204 +4,93 @@ import math
 import pandas as pd
 
 class Morgan_Stanley():
-    name = 'Morgan Stanley'
+    name = 'Morgan_Stanley'
 
     def __init__(self, statement):
         self.statement = statement
-        print(statement.pdf_file)
 
-        # get period dates
-        self.start_date = None
-        self.end_date = None
-        for block in self.statement.get_page_blocks(0):
-            if block[0].startswith('Beginning Total Value'):
-                self.start_date = datetime.strptime(block[0].split('as of ')[-1].strip(')'), '%m/%d/%y')
-                self.end_date = datetime.strptime(block[2].split('as of ')[-1].strip(')'), '%m/%d/%y')
+        print('')
+        print('%s: %s' % (self.name, self.statement.pdf_file))
+        self.__set_account_info()
+        self.__set_holdings()
+        self.__set_transactions()
 
-        # find account pages
-        account_summary_pages = []
-        account_detail_pages = []
-        for page_num, blocks in self.statement.get_blocks().items():
-            for block in blocks:
-                if block[0].startswith('Account Summary'):
-                    account_summary_pages.append(page_num)
-                    break
-                if block[0].startswith('Account Detail'):
-                    account_detail_pages.append(page_num)
-                    break
-
-        # get account summary
-        self.account_name = None
-        self.account_type = None
-        blocks = self.statement.get_page_blocks(account_summary_pages[0])
-        for block_idx in range(len(blocks)):
-            if blocks[block_idx][0] =='Morgan Stanley at Work Self-Directed Account':
-                self.account_type = blocks[block_idx][0]
-                self.account_name = blocks[block_idx+1][0]
-                break
-            if blocks[block_idx][0] =='Self-Directed Retirement Account':
-                self.account_type = blocks[block_idx][0]
-                self.account_name = blocks[block_idx+1][0]
-                break
-            if blocks[block_idx][0] =='Active Assets Account':
-                self.account_type = blocks[block_idx][0]
-                self.account_name = blocks[block_idx+1][0]
-                break
-
-        # print('Account Name: %s' % self.account_name)
-        # print('Account Type: %s' % self.account_type)
-        # print('Start Date: %s' % self.start_date)
-        # print('End Date: %s' % self.end_date)
-
-        # get account detail
-        self.holdings = {}
-        self.transactions = []
-        self.get_chunks(account_detail_pages)
-        self.get_holdings()
-        self.get_activity()
+        
+        # print('Account Number: %s' % self.account_number)
+        # print('Account Type  : %s' % self.account_type)
+        # print('Start Date    : %s' % self.start_date)
+        # print('End Date      : %s' % self.end_date)
 
         # pp(self.holdings)
         pp(self.transactions)
+    
+    def __set_holdings(self):
+        self.holdings = {}
+        
+        # 'Holdings'
+        holding = self.__name_pages['Holdings']['children']
+        for line in holding['STOCKS']['children']['COMMON STOCKS']['lines']:
+            if line.isupper() and ' (' in line:
+                splits = line.split(' (')
+                self.holdings[splits[0]] = {'type': 'STOCK', 'symbol': splits[1][:-1]}
 
-    def get_chunks(self, account_detail_pages):
-        chunk_names = ['HOLDINGS', 'ACTIVITY', 'MESSAGES']
-        current_chunk = None
-        current_subchunk = None
-        chunk_lines = {}
-        for page_num in account_detail_pages:
-            for block in self.statement.get_page_blocks(page_num):
-                if block[0] in chunk_names:
-                    current_chunk = block[0]
-                    # print('\t%s' % current_chunk)
-                    current_subchunk = None
-                    continue
-                if current_chunk == 'HOLDINGS':
-                    if block[0] == 'COMMON STOCKS':
-                        current_subchunk = 'COMMON STOCKS'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'TREASURY SECURITIES':
-                        current_subchunk = 'TREASURY SECURITIES'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'OPEN-END MUTUAL FUNDS':
-                        current_subchunk = 'OPEN-END MUTUAL FUNDS'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'CASH, BANK DEPOSIT PROGRAM AND MONEY MARKET FUNDS':
-                        current_subchunk = 'CASH, BANK DEPOSIT PROGRAM AND MONEY MARKET FUNDS'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'CERTIFICATES OF DEPOSIT':
-                        current_subchunk = 'CERTIFICATES OF DEPOSIT'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'OPEN-END NON-SWEEP MONEY MARKET FUNDS':
-                        current_subchunk = 'OPEN-END NON-SWEEP MONEY MARKET FUNDS'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'ALLOCATION OF ASSETS':
-                        current_subchunk = None
-                        continue
-                if current_chunk == 'ACTIVITY':
-                    if block[0] == 'CASH FLOW ACTIVITY BY DATE':
-                        current_subchunk = 'CASH FLOW ACTIVITY BY DATE'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY':
-                        current_subchunk = 'MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'SECURITY TRANSFERS':
-                        current_subchunk = 'SECURITY TRANSFERS'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'CORPORATE ACTIONS':
-                        current_subchunk = 'CORPORATE ACTIONS'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] == 'UNSETTLED PURCHASES/SALES ACTIVITY':
-                        current_subchunk = 'UNSETTLED PURCHASES/SALES ACTIVITY'
-                        # print('\t\t%s' % current_subchunk)
-                        chunk_lines[current_subchunk] = []
-                        continue
-                    if block[0] in ['NET CREDITS/(DEBITS)', 'NET ACTIVITY FOR PERIOD',
-                            'TOTAL SECURITY TRANSFERS', 'NET UNSETTLED PURCHASES/SALES', 'Account Detail']:
-                        current_subchunk = None
-                        continue
+        # 'Account Detail' 'HOLDINGS'
+        holding = self.__name_pages['Account Detail']['children']['HOLDINGS']['children']
 
-                if current_subchunk in chunk_lines:
-                    for line in block:
-                        chunk_lines[current_subchunk].append(line)
+        # securities symbols
+        for line in holding['STOCKS']['children']['COMMON STOCKS']['lines']:
+            if line.isupper() and ' (' in line:
+                splits = line.split(' (')
+                self.holdings[splits[0]] = {'type': 'STOCK', 'symbol': splits[1][:-1]}
+        mutual_funds = holding['MUTUAL FUNDS']['children']
+        for line in mutual_funds['OPEN-END MUTUAL FUNDS']['lines']:
+            if line.isupper() and ' (' in line:
+                splits = line.split(' (')
+                self.holdings[splits[0]] = {'type': 'MUTUAL FUND', 'symbol': splits[1][:-1]}
+        for line in mutual_funds['OPEN-END NON-SWEEP MONEY MARKET FUNDS']['lines']:
+            if line.isupper() and ' (' in line:
+                splits = line.split(' (')
+                self.holdings[splits[0]] = {'type': 'MONEY MARKET FUND', 'symbol': splits[1][:-1]}
+        for line in holding['EXCHANGE-TRADED & CLOSED-END FUNDS']['lines']:
+            if line.isupper() and ' (' in line:
+                splits = line.split(' (')
+                self.holdings[splits[0]] = {'type': 'EXCHANGE-TRADED FUND', 'symbol': splits[1][:-1]}
 
-        self.chunks = chunk_lines
+        # securities cusip
+        treasaury_lines = holding['GOVERNMENT SECURITIES']['children']['TREASURY SECURITIES']['lines']
+        for line_index in range(len(treasaury_lines)):
+            line = treasaury_lines[line_index]
+            if line.isupper():
+                if (len(treasaury_lines)-line_index) > 1:
+                    next_line = treasaury_lines[line_index+1]
+                    if 'CUSIP' in next_line:
+                        cusip = next_line.split('CUSIP ')[1].strip()
+                        self.holdings[line+' '+cusip] = {'type': 'TREASURY BILL', 'symbol': cusip}
+        certificate_lines = holding['CERTIFICATES OF DEPOSIT']['lines']
+        for line_index in range(len(certificate_lines)):
+            line = certificate_lines[line_index]
+            if line.isupper():
+                if (len(certificate_lines)-line_index) > 1:
+                    next_line = certificate_lines[line_index+1]
+                    if 'CUSIP' in next_line:
+                        cusip = next_line.split('CUSIP ')[1].strip()
+                        self.holdings[line+' '+cusip] = {'type': 'CERTIFICATE OF DEPOSIT', 'symbol': cusip}
 
-    def get_holdings(self):
-        if 'COMMON STOCKS' in self.chunks:
-            lines = self.chunks['COMMON STOCKS']
-            for line_index in range(len(lines)):
-                line = lines[line_index]
-                if line.isupper() and ' (' in line:
-                    splits = line.split(' (')
-                    self.holdings[splits[0]] = {'type': 'STOCK', 'symbol': splits[1][:-1]}
-        if 'OPEN-END MUTUAL FUNDS' in self.chunks:
-            lines = self.chunks['OPEN-END MUTUAL FUNDS']
-            for line_index in range(len(lines)):
-                line = lines[line_index]
-                if line.isupper() and ' (' in line:
-                    splits = line.split(' (')
-                    self.holdings[splits[0]] = {'type': 'MUTUAL FUND', 'symbol': splits[1][:-1]}
-        if 'OPEN-END NON-SWEEP MONEY MARKET FUNDS' in self.chunks:
-            lines = self.chunks['OPEN-END NON-SWEEP MONEY MARKET FUNDS']
-            for line_index in range(len(lines)):
-                line = lines[line_index]
-                if line.isupper() and ' (' in line:
-                    splits = line.split(' (')
-                    self.holdings[splits[0]] = {'type': 'MONEY MARKET FUND', 'symbol': splits[1][:-1]}
-        if 'TREASURY SECURITIES' in self.chunks:
-            lines = self.chunks['TREASURY SECURITIES']
-            for line_index in range(len(lines)):
-                line = lines[line_index]
-                if line.isupper():
-                    if (len(lines)-line_index) > 1:
-                        next_line = lines[line_index+1]
-                        if 'CUSIP' in next_line:
-                            cusip = next_line.split('CUSIP ')[1].strip()
-                            self.holdings[line+' '+cusip] = {'type': 'TREASURY BILL', 'symbol': cusip}
-        if 'CERTIFICATES OF DEPOSIT' in self.chunks:
-            lines = self.chunks['CERTIFICATES OF DEPOSIT']
-            for line_index in range(len(lines)):
-                line = lines[line_index]
-                if line.isupper():
-                    if (len(lines)-line_index) > 1:
-                        next_line = lines[line_index+1]
-                        if 'CUSIP' in next_line:
-                            cusip = next_line.split('CUSIP ')[1].strip()
-                            self.holdings[line+' '+cusip] = {'type': 'CERTIFICATES OF DEPOSIT', 'symbol': cusip}
+    def __set_transactions(self):
+        self.transactions = []
 
-    def get_activity(self):
-        for chunk_name, lines in self.chunks.items():
-            if chunk_name in [
-                'CASH FLOW ACTIVITY BY DATE',
-                'MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY',
-                'SECURITY TRANSFERS',
-                'CORPORATE ACTIONS',    
-                'UNSETTLED PURCHASES/SALES ACTIVITY',    
-            ]:
-                # print('\t\t%s' % chunk_name)
-                # for line in lines:
-                #     print('\t\t%s' % line)
-                self.get_transactions(lines)
+        activity = self.__name_pages['Activity']['children']
+        self.get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
+        self.get_transactions(activity['SECURITY ACTIVITY']['children']['SECURITY TRANSFERS']['lines'])
+
+        activity = self.__name_pages['Account Detail']['children']['ACTIVITY']['children']
+        self.get_transactions(activity['CASH FLOW ACTIVITY BY DATE']['lines'])
+        self.get_transactions(activity['MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY']['lines'])
+        self.get_transactions(activity['INVESTMENT RELATED ACTIVITY']['children']['TAXABLE INCOME']['lines'])
+        self.get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
+        self.get_transactions(activity['TRANSFERS, CORPORATE ACTIONS AND ADDITIONAL ACTIVITY']['children']['SECURITY TRANSFERS']['lines'])
+        self.get_transactions(activity['TRANSFERS, CORPORATE ACTIONS AND ADDITIONAL ACTIVITY']['children']['CORPORATE ACTIONS']['lines'])
+        self.get_transactions(activity['UNSETTLED PURCHASES/SALES ACTIVITY']['lines'])
 
     def get_transactions(self, lines):
         last_index = None
@@ -241,15 +130,7 @@ class Morgan_Stanley():
             self.parse_transaction(current_transaction)
             self.transactions.append(current_transaction)
 
-    def trim_transaction_lines(self, transaction):
-        try:
-            index = transaction['lines'].index('Account Detail')
-            transaction['lines'] = transaction['lines'][:index]
-        except:
-            pass
-
     def parse_transaction(self, transaction):
-        # self.trim_transaction_lines(transaction)
         lines = transaction.pop('lines')
         last_string_index = self.get_last_string_index(lines)
         transaction['TransactionType'] = lines[0]
@@ -292,4 +173,270 @@ class Morgan_Stanley():
                 index += 1
             index = -index
             return index
+
+    def __set_name_pages(self):
+        self.__name_pages = {
+            'Research Ratings & GIMA Status Definitions': {
+                'pages': [],
+                'children': {},
+            },
+            'Expanded Disclosures': {
+                'pages': [],
+                'children': {},
+            },
+            'Account Summary': {
+                'pages': [],
+                'children': {},
+            },
+            'Account Detail': {
+                'pages': [],
+                'children': {
+                    'HOLDINGS': {
+                        'stop': None,
+                        'lines': [],
+                        'children': {
+                            'STOCKS': {
+                                'stop': 'STOCKS',
+                                'lines': [],
+                                'children': {
+                                    'COMMON STOCKS': {
+                                        'stop': None,
+                                        'lines': [],
+                                    },
+                                },
+                            },
+                            'MUTUAL FUNDS': {
+                                'stop': 'MUTUAL FUNDS',
+                                'lines': [],
+                                'children': {
+                                    'OPEN-END MUTUAL FUNDS': {
+                                        'stop': None,
+                                        'lines': [],
+                                    },
+                                    'OPEN-END NON-SWEEP MONEY MARKET FUNDS': {
+                                        'stop': None,
+                                        'lines': [],
+                                    },
+                                },
+                            },
+                            'EXCHANGE-TRADED & CLOSED-END FUNDS': {
+                                'stop': 'EXCHANGE-TRADED & CLOSED-END FUNDS',
+                                'lines': [],
+                            },
+                            'GOVERNMENT SECURITIES': {
+                                'stop': 'GOVERNMENT SECURITIES',
+                                'lines': [],
+                                'children': {
+                                    'TREASURY SECURITIES': {
+                                        'stop': None,
+                                        'lines': [],
+                                    },
+                                },
+                            },
+                            'CERTIFICATES OF DEPOSIT': {
+                                'stop': 'CERTIFICATES OF DEPOSIT',
+                                'lines': [],
+                            },
+                            'EXCHANGE-TRADED & CLOSED-END FUNDS': {
+                                'stop': 'EXCHANGE-TRADED & CLOSED-END FUNDS',
+                                'lines': [],
+                            },
+                        },
+                    },
+                    'ACTIVITY': {
+                        'stop': None,
+                        'lines': [],
+                        'children': {
+                            'CASH FLOW ACTIVITY BY DATE': {
+                                'stop': 'NET CREDITS/(DEBITS)',
+                                'lines': [],
+                            },
+                            'MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY': {
+                                'stop': 'NET ACTIVITY FOR PERIOD',
+                                'lines': [],
+                            },
+                            'INVESTMENT RELATED ACTIVITY': {
+                                'stop': None,
+                                'lines': [],
+                                'children': {
+                                    'TAXABLE INCOME': {
+                                        'stop': 'TOTAL TAXABLE INCOME',
+                                        'lines': [],
+                                    },
+                                },
+                            },
+                            'CASH RELATED ACTIVITY': {
+                                'stop': None,
+                                'lines': [],
+                                'children': {
+                                    'ELECTRONIC TRANSFERS': {
+                                        'stop': 'TOTAL ELECTRONIC TRANSFERS',
+                                        'lines': [],
+                                    },
+                                    'OTHER CREDITS AND DEBITS': {
+                                        'stop': 'TOTAL OTHER CREDITS AND DEBITS',
+                                        'lines': [],
+                                    },
+                                },
+                            },
+                            'TRANSFERS, CORPORATE ACTIONS AND ADDITIONAL ACTIVITY': {
+                                'stop': None,
+                                'lines': [],
+                                'children': {
+                                    'SECURITY TRANSFERS': {
+                                        'stop': 'TOTAL SECURITY TRANSFERS',
+                                        'lines': [],
+                                    },
+                                    'CORPORATE ACTIONS': {
+                                        'stop': None,
+                                        'lines': [],
+                                    },
+                                },
+                            },
+                            'UNSETTLED PURCHASES/SALES ACTIVITY': {
+                                'stop': 'NET UNSETTLED PURCHASES/SALES',
+                                'lines': [],
+                            },
+                        },
+                    },
+                    'MESSAGES': {
+                        'stop': None,
+                        'lines': [],
+                    },
+                },
+            },
+            'Holdings': {
+                'pages': [],
+                'children': {
+                    'STOCKS': {
+                        'stop': 'STOCKS',
+                        'lines': [],
+                        'children': {
+                            'COMMON STOCKS': {
+                                'stop': None,
+                                'lines': [],
+                            },
+                        },
+                    },
+                },
+            },
+            'Activity': {
+                'pages': [],
+                'children': {
+                    'CASH RELATED ACTIVITY': {
+                        'stop': None,
+                        'lines': [],
+                        'children': {
+                            'ELECTRONIC TRANSFERS': {
+                                'stop': 'TOTAL ELECTRONIC TRANSFERS',
+                                'lines': [],
+                            },
+                        },
+                    },
+                    'SECURITY ACTIVITY': {
+                        'stop': None,
+                        'lines': [],
+                        'children': {
+                            'SECURITY TRANSFERS': {
+                                'stop': '066058 MSGDD46B', # NOTE: this is very hacky , but only one occasion
+                                'lines': [],
+                            },
+                        },
+                    },
+                },
+            },
+            'Messages': {
+                'pages': [],
+                'children': {},
+            },
+            'Research Ratings Definitions': {
+                'pages': [],
+                'children': {},
+            },
+            'Standard Disclosures': {
+                'pages': [],
+                'children': {},
+            },
+            'Disclosure': {
+                'pages': [],
+                'children': {},
+            },
+            'Recap of Cash Management Activity': {
+                'pages': [],
+                'children': {},
+            },
+        }
+        for page_num, blocks in self.statement.get_blocks().items():
+            for block in blocks:
+                if block[0] in self.__name_pages.keys():
+                    # print('%s: %s' % (block[0], page_num))
+                    self.__name_pages[block[0]]['pages'].append(page_num)
+                    break
+                if 'Recap of Cash Management Activity' in block[0]:
+                    # print('Recap of Cash Management Activity: %s' % page_num)
+                    self.__name_pages['Recap of Cash Management Activity']['pages'].append(page_num)
+                    break
+
+        for page_name, page_data in self.__name_pages.items():
+            if len(page_data['pages']) > 0:
+                if len(page_data['children']) > 0:
+                    lines = []
+                    for page_num in page_data['pages']:
+                        blocks = self.statement.get_page_blocks(page_num)
+                        for block in blocks:
+                            lines += block
+                    self.recurse_blocks(page_data['children'], lines)
+    
+    def recurse_blocks(self, name_pages, lines):
+        current_name = None
+        for line in lines:
+            
+            if current_name != None:
+                if 'stop' in name_pages[current_name]:
+                    if line == name_pages[current_name]['stop']:
+                        current_name = None
+                        continue
+            
+            if line in name_pages.keys():
+                current_name = line
+                continue
+
+            if current_name != None:
+                name_pages[current_name]['lines'].append(line)
+
+        for name, name_data in name_pages.items():
+            if 'children' in name_data:
+                self.recurse_blocks(name_data['children'], name_data['lines'])
+
+    def __set_account_info(self):
+        self.__set_name_pages()
+        self.account_type = None
+        self.account_number = None
+        self.start_date = None
+        self.end_date = None
+
+        # get account info
+        lines = self.statement.get_page_lines(self.__name_pages['Account Summary']['pages'][0])
+        for line_idx in range(len(lines)):
+            line = lines[line_idx]
+            if self.account_type == None and 'Account' in line:
+                self.account_type = line
+                self.account_number = lines[line_idx+1]
+            if 'For the Period' in line:
+                period = line.split('For the Period ')[-1].strip()
+                splits = period.split(',')
+                year = splits[1].strip()
+                splits = splits[0].split('-')
+                
+                self.start_date = splits[0].strip().split(' ')
+
+                self.end_date = splits[1].strip().split(' ')
+                if len(self.end_date) > 1:
+                    self.end_date = '%s/%s/%s' % (self.end_date[0].strip(), self.end_date[1].strip(), year)
+                else:
+                    self.end_date = '%s/%s/%s' % (self.start_date[0].strip(), self.end_date[0].strip(), year)
+                self.end_date = datetime.strptime(self.end_date, '%B/%d/%Y')
+
+                self.start_date = '%s/%s/%s' % (self.start_date[0].strip(), self.start_date[1].strip(), year)
+                self.start_date = datetime.strptime(self.start_date, '%B/%d/%Y')
 
