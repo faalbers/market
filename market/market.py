@@ -9,7 +9,7 @@ import pandas as pd
 from langchain_ollama import OllamaLLM
 from .utils import stop_text
 from .analysis import Analysis
-from .quicken import Quicken
+# from .quicken import Quicken
 from .report import Report
 from .portfolio import Portfolio
 
@@ -74,8 +74,8 @@ class Market():
     def get_tickers(self, symbols):
         return Tickers(symbols)
     
-    def get_quicken(self, file_name):
-        return Quicken(file_name)
+    # def get_quicken(self, file_name):
+    #     return Quicken(file_name)
     
     def get_us_market_tickers(self, update=False):
         symbols_data = self.vault.get_data(['us_symbols'], update=update)['us_symbols']

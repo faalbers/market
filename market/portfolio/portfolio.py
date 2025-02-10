@@ -27,12 +27,11 @@ class Portfolio():
                         morgan_stanley = True
                     elif morgan_stanley and block[0] == 'Account Summary':
                         company_statement = Morgan_Stanley(statement)
+                    elif block[0] in ['Account At A Glance', 'Portfolio At A Glance']:
+                        company_statement = Etrade(statement)
                     elif block[0].startswith('Envelope'):
                         pass
                         # company_statement = Fidelity(statement)
-                    elif block[0] in ['Account At A Glance', 'Portfolio At A Glance']:
-                        pass
-                        # company_statement = Etrade(statement)
                     elif block[0] == 'Account carried by Citigroup Global Markets Inc.  Member SIPC.':
                         pass
                         # company_statement = Citi(statement)

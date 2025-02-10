@@ -11,15 +11,15 @@ class Morgan_Stanley():
 
         print('')
         print('%s: %s' % (self.name, self.statement.pdf_file))
+
         self.__set_account_info()
         self.__set_holdings()
         self.__set_transactions()
-
         
-        # print('Account Number: %s' % self.account_number)
-        # print('Account Type  : %s' % self.account_type)
-        # print('Start Date    : %s' % self.start_date)
-        # print('End Date      : %s' % self.end_date)
+        print('Account Number: %s' % self.account_number)
+        print('Account Type  : %s' % self.account_type)
+        print('Start Date    : %s' % self.start_date)
+        print('End Date      : %s' % self.end_date)
 
         # pp(self.holdings)
         pp(self.transactions)
@@ -79,20 +79,22 @@ class Morgan_Stanley():
     def __set_transactions(self):
         self.transactions = []
 
+        # TODO: Maybe pop lines after using them ?
+
         activity = self.__name_pages['Activity']['children']
-        self.get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
-        self.get_transactions(activity['SECURITY ACTIVITY']['children']['SECURITY TRANSFERS']['lines'])
+        self.__get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
+        self.__get_transactions(activity['SECURITY ACTIVITY']['children']['SECURITY TRANSFERS']['lines'])
 
         activity = self.__name_pages['Account Detail']['children']['ACTIVITY']['children']
-        self.get_transactions(activity['CASH FLOW ACTIVITY BY DATE']['lines'])
-        self.get_transactions(activity['MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY']['lines'])
-        self.get_transactions(activity['INVESTMENT RELATED ACTIVITY']['children']['TAXABLE INCOME']['lines'])
-        self.get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
-        self.get_transactions(activity['TRANSFERS, CORPORATE ACTIONS AND ADDITIONAL ACTIVITY']['children']['SECURITY TRANSFERS']['lines'])
-        self.get_transactions(activity['TRANSFERS, CORPORATE ACTIONS AND ADDITIONAL ACTIVITY']['children']['CORPORATE ACTIONS']['lines'])
-        self.get_transactions(activity['UNSETTLED PURCHASES/SALES ACTIVITY']['lines'])
+        self.__get_transactions(activity['CASH FLOW ACTIVITY BY DATE']['lines'])
+        self.__get_transactions(activity['MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY']['lines'])
+        self.__get_transactions(activity['INVESTMENT RELATED ACTIVITY']['children']['TAXABLE INCOME']['lines'])
+        self.__get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
+        self.__get_transactions(activity['TRANSFERS, CORPORATE ACTIONS AND ADDITIONAL ACTIVITY']['children']['SECURITY TRANSFERS']['lines'])
+        self.__get_transactions(activity['TRANSFERS, CORPORATE ACTIONS AND ADDITIONAL ACTIVITY']['children']['CORPORATE ACTIONS']['lines'])
+        self.__get_transactions(activity['UNSETTLED PURCHASES/SALES ACTIVITY']['lines'])
 
-    def get_transactions(self, lines):
+    def __get_transactions(self, lines):
         last_index = None
         current_transaction = {}
         for line_index in range(len(lines)):
@@ -112,7 +114,7 @@ class Morgan_Stanley():
                     else:
                         # we got to the next Transaction Date
                         # store the last one and create a new one
-                        self.parse_transaction(current_transaction)
+                        self.__parse_transaction(current_transaction)
                         self.transactions.append(current_transaction)
                         current_transaction = {'TransactionDate': date, 'lines': []}
                 else:
@@ -127,12 +129,12 @@ class Morgan_Stanley():
         # make sure the last transaction is added if needed
         if 'TransactionDate' in current_transaction:
             # trim lines if needed
-            self.parse_transaction(current_transaction)
+            self.__parse_transaction(current_transaction)
             self.transactions.append(current_transaction)
 
-    def parse_transaction(self, transaction):
+    def __parse_transaction(self, transaction):
         lines = transaction.pop('lines')
-        last_string_index = self.get_last_string_index(lines)
+        last_string_index = self.__get_last_string_index(lines)
         transaction['TransactionType'] = lines[0]
         transaction['Description'] = lines[1]
         if transaction['Description'] in self.holdings:
@@ -145,17 +147,17 @@ class Morgan_Stanley():
             transaction['Description'] += ' ' + cusip
             transaction['Symbol'] = cusip
             transaction['SecurityType'] = 'TREASURY BILL'
-        transaction['Amount'] = self.get_float(lines[-1])
+        transaction['Amount'] = self.__get_float(lines[-1])
         if last_string_index < -2:
-            transaction['Quantity'] = self.get_float(lines[last_string_index+1])
+            transaction['Quantity'] = self.__get_float(lines[last_string_index+1])
             if transaction['TransactionType'] in ['Bought', 'Sold', 'Redemption']:
                 transaction['Quantity'] *= -math.copysign(1, transaction['Amount'])
         if last_string_index < -3:
-            transaction['Price'] = self.get_float(lines[last_string_index+2])
+            transaction['Price'] = self.__get_float(lines[last_string_index+2])
             if transaction['TransactionType'] in ['Redemption']:
                 transaction['Price'] /= 100
 
-    def get_float(self, text):
+    def __get_float(self, text):
         if text.startswith('$'): text = text[1:]
         if text.startswith('('): text = '-'+text[1:-1]
         text = text.replace(',', '')
@@ -164,12 +166,12 @@ class Morgan_Stanley():
         except:
             return None
 
-    def get_last_string_index(self, lines):
+    def __get_last_string_index(self, lines):
             index = 1
             lines_reverse = lines.copy()
             lines_reverse.reverse()
             for line in lines_reverse:
-                if self.get_float(line) == None: break
+                if self.__get_float(line) == None: break
                 index += 1
             index = -index
             return index
@@ -385,9 +387,9 @@ class Morgan_Stanley():
                         blocks = self.statement.get_page_blocks(page_num)
                         for block in blocks:
                             lines += block
-                    self.recurse_blocks(page_data['children'], lines)
+                    self.recurse_lines(page_data['children'], lines)
     
-    def recurse_blocks(self, name_pages, lines):
+    def recurse_lines(self, name_pages, lines):
         current_name = None
         for line in lines:
             
@@ -406,7 +408,7 @@ class Morgan_Stanley():
 
         for name, name_data in name_pages.items():
             if 'children' in name_data:
-                self.recurse_blocks(name_data['children'], name_data['lines'])
+                self.recurse_lines(name_data['children'], name_data['lines'])
 
     def __set_account_info(self):
         self.__set_name_pages()
