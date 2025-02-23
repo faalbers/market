@@ -8,6 +8,6 @@ class Morgan_Stanley_SB():
 
     def __init__(self, statement):
         self.statement = statement
+        return
         print('')
         print('%s: %s' % (self.name, self.statement.pdf_file))
-        return

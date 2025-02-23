@@ -1,4 +1,5 @@
 from ..vault import Vault
+from ..viz import Viz
 import pandas as pd
 from pprint import pp
 
@@ -6,6 +7,7 @@ class Tickers():
     def __init__(self, symbols=[]):
         self.symbols = set([symbol.upper() for symbol in symbols])
         self.vault = Vault()
+        self.viz = Viz()
     
     @property
     def count(self):
@@ -81,5 +83,9 @@ class Tickers():
     
     def update(self, catalogs):
         self.vault.update(catalogs, self.symbols)
-    
+
+    def make_data_report(self):
+        all_data = self.get_all()
+        self.viz.data_keys_text(all_data, rename_set=set(self.get_symbols()), rename_to='symbol')
+
     # TODO: add __str__

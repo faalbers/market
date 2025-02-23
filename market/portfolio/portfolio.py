@@ -6,8 +6,9 @@ import pandas as pd
 class Portfolio():
     def __init__(self):
         # get statements
-        pdf_files = glob.glob('test_statements/*.pdf')
+        # pdf_files = glob.glob('test_statements/*.pdf')
         # pdf_files = glob.glob('database/statements/*.pdf')
+        pdf_files = glob.glob('database/statements_ms/*.pdf')
         
         # pdf_files = ['database/statements/Etrade_TRUST_2024_08.pdf']
         # pdf_files = ['database/statements/RO_2023_09_MS.pdf']
@@ -30,8 +31,7 @@ class Portfolio():
                     elif block[0] in ['Account At A Glance', 'Portfolio At A Glance']:
                         company_statement = Etrade(statement)
                     elif block[0].startswith('Envelope'):
-                        pass
-                        # company_statement = Fidelity(statement)
+                        company_statement = Fidelity(statement)
                     elif block[0] == 'Account carried by Citigroup Global Markets Inc.  Member SIPC.':
                         pass
                         # company_statement = Citi(statement)
@@ -39,8 +39,7 @@ class Portfolio():
                         pass
                         # company_statement = Schwab(statement)
                     elif block[0] == 'SCOTTRADE, INC':
-                        pass
-                        # company_statement = Scottrade(statement)
+                        company_statement = Scottrade(statement)
                     elif block[0].startswith('Merrill Lynch Wealth Management'):
                         pass
                         # company_statement = Merrill_Lynch(statement)
@@ -57,7 +56,10 @@ class Portfolio():
             
         # print('statements: %d' % len(company_statements))
         
-        # results = set()
+        # holdings = set()
         # for company_statement in company_statements:
-        #     results.update(company_statement.get_uppers())
-        # pp(sorted(results))
+        #     for account_number, account_data in company_statement.accounts.items():
+        #         holdings.update(account_data['holdings'].keys())
+        #         # if 'JPMORGAN CHASE BK N A FID 46656MBD2' in account_data['holdings']:
+        #         #     pp(account_data['holdings']['JPMORGAN CHASE BK N A FID 46656MBD2'])
+        # pp(holdings)

@@ -304,31 +304,31 @@ class Catalog():
             'sets': {
                 'Yahoo': { 'scrapes': {
                         Yahoo_Quote: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
-                        Yahoo_Chart: {
-                            'post_procs': [[reference, {}]],
-                            'tables': { 'table_reference': { 'column_settings': [ ['chart', 'chart'], ], }, },
-                        },
+                        # Yahoo_Chart: {
+                        #     'post_procs': [[reference, {}]],
+                        #     'tables': { 'table_reference': { 'column_settings': [ ['chart', 'chart'], ], }, },
+                        # },
                     },
                 },
-                'FMP': { 'scrapes': {
-                        FMP_Stocklist: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
-                    },
-                },
-                'Polygon': { 'scrapes': {
-                        Polygon_Tickers: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
-                        Polygon_News: {
-                            'post_procs': [[reference, {}]],
-                            'tables': { 'table_reference': { 'column_settings': [ ['news', 'news_polygon'], ], }, },
-                        },
-                    },
-                },
-                'Finviz': { 'scrapes': {
-                        Finviz_Ticker_News: {
-                            'post_procs': [[reference, {}]],
-                            'tables': { 'table_reference': { 'column_settings': [ ['news', 'news_finviz'], ], }, },
-                        },
-                    },
-                },
+                # 'FMP': { 'scrapes': {
+                #         FMP_Stocklist: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
+                #     },
+                # },
+                # 'Polygon': { 'scrapes': {
+                #         Polygon_Tickers: { 'tables': { 'all': { 'column_settings': [ ['all', ''], ], }, }, },
+                #         Polygon_News: {
+                #             'post_procs': [[reference, {}]],
+                #             'tables': { 'table_reference': { 'column_settings': [ ['news', 'news_polygon'], ], }, },
+                #         },
+                #     },
+                # },
+                # 'Finviz': { 'scrapes': {
+                #         Finviz_Ticker_News: {
+                #             'post_procs': [[reference, {}]],
+                #             'tables': { 'table_reference': { 'column_settings': [ ['news', 'news_finviz'], ], }, },
+                #         },
+                #     },
+                # },
             },
         },
         'all_other': {

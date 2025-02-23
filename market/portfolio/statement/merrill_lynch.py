@@ -3,12 +3,13 @@ from pprint import pp
 import math
 import pandas as pd
 
-class Citi():
-    name = 'Citi'
+class Merrill_Lynch():
+    name = 'Merrill_Lynch'
 
     def __init__(self, statement):
-        
         self.statement = statement
+        self.accounts = {}
+        return
+
         print('')
         print('%s: %s' % (self.name, self.statement.pdf_file))
-        return

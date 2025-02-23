@@ -55,3 +55,10 @@ class Statement():
                 lines += block
 
         return lines
+
+    def get_tables(self, page_num):
+        self.doc = fitz.open(self.pdf_file)
+        page = self.doc.load_page(page_num)
+        tables = page.find_tables().tables
+        pp(tables)
+        self.doc.close()

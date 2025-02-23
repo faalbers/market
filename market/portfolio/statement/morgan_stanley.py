@@ -8,93 +8,42 @@ class Morgan_Stanley():
 
     def __init__(self, statement):
         self.statement = statement
+        self.accounts = {}
+        return
 
-        print('')
-        print('%s: %s' % (self.name, self.statement.pdf_file))
+        # print('')
+        # print('%s: %s' % (self.name, self.statement.pdf_file))
 
-        self.__set_account_info()
+        self.__set_name_pages()
+        self.__set_accounts_info()
         self.__set_holdings()
         self.__set_transactions()
-        
-        print('Account Number: %s' % self.account_number)
-        print('Account Type  : %s' % self.account_type)
-        print('Start Date    : %s' % self.start_date)
-        print('End Date      : %s' % self.end_date)
 
-        # pp(self.holdings)
-        pp(self.transactions)
-    
-    def __set_holdings(self):
-        self.holdings = {}
-        
-        # 'Holdings'
-        holding = self.__name_pages['Holdings']['children']
-        for line in holding['STOCKS']['children']['COMMON STOCKS']['lines']:
-            if line.isupper() and ' (' in line:
-                splits = line.split(' (')
-                self.holdings[splits[0]] = {'type': 'STOCK', 'symbol': splits[1][:-1]}
-
-        # 'Account Detail' 'HOLDINGS'
-        holding = self.__name_pages['Account Detail']['children']['HOLDINGS']['children']
-
-        # securities symbols
-        for line in holding['STOCKS']['children']['COMMON STOCKS']['lines']:
-            if line.isupper() and ' (' in line:
-                splits = line.split(' (')
-                self.holdings[splits[0]] = {'type': 'STOCK', 'symbol': splits[1][:-1]}
-        mutual_funds = holding['MUTUAL FUNDS']['children']
-        for line in mutual_funds['OPEN-END MUTUAL FUNDS']['lines']:
-            if line.isupper() and ' (' in line:
-                splits = line.split(' (')
-                self.holdings[splits[0]] = {'type': 'MUTUAL FUND', 'symbol': splits[1][:-1]}
-        for line in mutual_funds['OPEN-END NON-SWEEP MONEY MARKET FUNDS']['lines']:
-            if line.isupper() and ' (' in line:
-                splits = line.split(' (')
-                self.holdings[splits[0]] = {'type': 'MONEY MARKET FUND', 'symbol': splits[1][:-1]}
-        for line in holding['EXCHANGE-TRADED & CLOSED-END FUNDS']['lines']:
-            if line.isupper() and ' (' in line:
-                splits = line.split(' (')
-                self.holdings[splits[0]] = {'type': 'EXCHANGE-TRADED FUND', 'symbol': splits[1][:-1]}
-
-        # securities cusip
-        treasaury_lines = holding['GOVERNMENT SECURITIES']['children']['TREASURY SECURITIES']['lines']
-        for line_index in range(len(treasaury_lines)):
-            line = treasaury_lines[line_index]
-            if line.isupper():
-                if (len(treasaury_lines)-line_index) > 1:
-                    next_line = treasaury_lines[line_index+1]
-                    if 'CUSIP' in next_line:
-                        cusip = next_line.split('CUSIP ')[1].strip()
-                        self.holdings[line+' '+cusip] = {'type': 'TREASURY BILL', 'symbol': cusip}
-        certificate_lines = holding['CERTIFICATES OF DEPOSIT']['lines']
-        for line_index in range(len(certificate_lines)):
-            line = certificate_lines[line_index]
-            if line.isupper():
-                if (len(certificate_lines)-line_index) > 1:
-                    next_line = certificate_lines[line_index+1]
-                    if 'CUSIP' in next_line:
-                        cusip = next_line.split('CUSIP ')[1].strip()
-                        self.holdings[line+' '+cusip] = {'type': 'CERTIFICATE OF DEPOSIT', 'symbol': cusip}
+        # pp(self.accounts)
 
     def __set_transactions(self):
-        self.transactions = []
-
         # TODO: Maybe pop lines after using them ?
-
-        activity = self.__name_pages['Activity']['children']
-        self.__get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
-        self.__get_transactions(activity['SECURITY ACTIVITY']['children']['SECURITY TRANSFERS']['lines'])
 
         activity = self.__name_pages['Account Detail']['children']['ACTIVITY']['children']
         self.__get_transactions(activity['CASH FLOW ACTIVITY BY DATE']['lines'])
-        self.__get_transactions(activity['MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY']['lines'])
         self.__get_transactions(activity['INVESTMENT RELATED ACTIVITY']['children']['TAXABLE INCOME']['lines'])
-        self.__get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
         self.__get_transactions(activity['TRANSFERS, CORPORATE ACTIONS AND ADDITIONAL ACTIVITY']['children']['SECURITY TRANSFERS']['lines'])
         self.__get_transactions(activity['TRANSFERS, CORPORATE ACTIONS AND ADDITIONAL ACTIVITY']['children']['CORPORATE ACTIONS']['lines'])
         self.__get_transactions(activity['UNSETTLED PURCHASES/SALES ACTIVITY']['lines'])
+        
+        # activities that do nothing on securities, but we keep them around for now
+        # self.__get_transactions(activity['MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY']['lines'])
+        # self.__get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
+        
+
+        activity = self.__name_pages['Activity']['children']
+        self.__get_transactions(activity['SECURITY ACTIVITY']['children']['SECURITY TRANSFERS']['lines'])
+
+        # activities that do nothing on securities, but we keep them around for now
+        # self.__get_transactions(activity['CASH RELATED ACTIVITY']['children']['ELECTRONIC TRANSFERS']['lines'])
 
     def __get_transactions(self, lines):
+        account = self.accounts[list(self.accounts.keys())[0]]
         last_index = None
         current_transaction = {}
         for line_index in range(len(lines)):
@@ -103,59 +52,182 @@ class Morgan_Stanley():
             if line_digits.isdigit() and line != line_digits and len(line_digits) <= 4:
                 # create a datetime object from the date line
                 date_elements = line.split('/')
-                date = datetime(month=int(date_elements[0]), day=int(date_elements[1]), year=self.end_date.year)
+                date = datetime(month=int(date_elements[0]), day=int(date_elements[1]), year=account['end_date'].year)
 
                 if last_index != None:
                     # check index difference between date line and last date line
                     diff_index = line_index - last_index
                     if diff_index == 1:
                         # looks like we have a Settlement Date
-                        current_transaction['SettlementDate'] = date
+                        current_transaction['settlement_date'] = date
                     else:
                         # we got to the next Transaction Date
                         # store the last one and create a new one
                         self.__parse_transaction(current_transaction)
-                        self.transactions.append(current_transaction)
-                        current_transaction = {'TransactionDate': date, 'lines': []}
+                        self.__add_transaction(current_transaction)
+                        current_transaction = {'transaction_date': date, 'lines': []}
                 else:
                     # this is the first Transaction Date, create a new one
-                    current_transaction = {'TransactionDate': date, 'lines': []}
+                    current_transaction = {'transaction_date': date, 'lines': []}
                 
                 # set index since last date line
                 last_index = line_index
-            elif 'TransactionDate' in current_transaction:
+            elif 'transaction_date' in current_transaction:
                 current_transaction['lines'].append(line)
         
         # make sure the last transaction is added if needed
-        if 'TransactionDate' in current_transaction:
-            # trim lines if needed
+        if 'transaction_date' in current_transaction:
             self.__parse_transaction(current_transaction)
-            self.transactions.append(current_transaction)
+            self.__add_transaction(current_transaction)
+
+    def __add_transaction(self, transaction):
+        if transaction['security'] == None: return
+        account = self.accounts[list(self.accounts.keys())[0]]
+        security = transaction.pop('security')
+        if security in account['holdings']:
+            account['holdings'][security]['transactions'].append(transaction)
+        else:
+            account['holdings'][security] = {'type': None, 'symbol': None, 'date': account['end_date'], 'transactions': []}
+            account['holdings'][security]['transactions'].append(transaction)
 
     def __parse_transaction(self, transaction):
         lines = transaction.pop('lines')
-        last_string_index = self.__get_last_string_index(lines)
-        transaction['TransactionType'] = lines[0]
-        transaction['Description'] = lines[1]
-        if transaction['Description'] in self.holdings:
-            transaction['Symbol'] = self.holdings[transaction['Description']]['symbol']
-            transaction['SecurityType'] = self.holdings[transaction['Description']]['type']
-        transaction['Comments'] = ' '.join(lines[2:(last_string_index+1)])
-        # NOTE: this is a hack
-        if transaction['Description'] == 'UNITED STATES TREASURY BILL':
-            cusip = transaction['Comments'].split(' [')[1].split(']')[0]
-            transaction['Description'] += ' ' + cusip
-            transaction['Symbol'] = cusip
-            transaction['SecurityType'] = 'TREASURY BILL'
-        transaction['Amount'] = self.__get_float(lines[-1])
-        if last_string_index < -2:
-            transaction['Quantity'] = self.__get_float(lines[last_string_index+1])
-            if transaction['TransactionType'] in ['Bought', 'Sold', 'Redemption']:
-                transaction['Quantity'] *= -math.copysign(1, transaction['Amount'])
-        if last_string_index < -3:
-            transaction['Price'] = self.__get_float(lines[last_string_index+2])
-            if transaction['TransactionType'] in ['Redemption']:
-                transaction['Price'] /= 100
+        lines = self.__trim_transaction_lines(lines)
+        transaction['type'] = lines[0]
+        transaction['security'] = lines[1]
+        if transaction['type'] in ['Bought', 'Sold', 'Dividend Reinvestment', 'Redemption']:
+            transaction['comments'] = ' '.join(lines[2:-3])
+            transaction['quantity'] = self.__get_float(lines[-3])
+            transaction['price'] = self.__get_float(lines[-2])
+        elif transaction['type'] in ['Dividend', 'Qualified Dividend', 'LT Cap Gain Distribution', 'ST Cap Gain Distribution', 'Service Fee']:
+            transaction['comments'] = ' '.join(lines[2:-1])
+            transaction['amount'] = self.__get_float(lines[-1])
+        elif transaction['type'] in ['Transfer into Account', 'Transfer out of Account']:
+            transaction['comments'] = ' '.join(lines[2:-2])
+            transaction['quantity'] = self.__get_float(lines[-2])
+            transaction['amount'] = self.__get_float(lines[-1])
+        elif transaction['type'] in ['Exchange Delivered Out', 'Exchange Received In', 'Stock Spin-Off']:
+            transaction['comments'] = ' '.join(lines[2:-1])
+            transaction['quantity'] = self.__get_float(lines[-1])
+        elif transaction['type'] == 'Interest Income' and not 'BANK' in transaction['security']:
+            transaction['comments'] = ' '.join(lines[2:-1])
+            transaction['amount'] = self.__get_float(lines[-1])
+        else:
+            # we are drastic, clear transaction of it does not effect equity
+            transaction['security'] = None
+            return
+        
+        # add cusip codes to security if needed
+        if transaction['security'] in ['UNITED STATES TREASURY BILL', 'JPMORGAN CHASE BK N A FID']:
+            cusip = transaction['comments'].split(' [')[1].split(']')[0]
+            transaction['security'] += ' ' + cusip
+            transaction['symbol'] = cusip
+
+        # pp(transaction)
+
+    def __trim_transaction_lines(self, lines):
+        if 'Account Detail' in lines:
+            return lines[:lines.index('Account Detail')]
+        return lines
+
+    def __set_holdings(self):
+        # 'Account Detail' 'HOLDINGS'
+        holding = self.__name_pages['Account Detail']['children']['HOLDINGS']['children']
+
+        lines = holding['STOCKS']['children']['COMMON STOCKS']['lines']
+        if len(lines) > 0:
+            # print('\tCOMMON STOCKS')
+            self.__add_stock(lines, 'stock')
+
+        lines = holding['EXCHANGE-TRADED & CLOSED-END FUNDS']['lines']
+        if len(lines) > 0:
+            # print('\tEXCHANGE-TRADED & CLOSED-END FUNDS')
+            self.__add_stock(lines, 'etf')
+
+        lines = holding['MUTUAL FUNDS']['children']['OPEN-END MUTUAL FUNDS']['lines']
+        if len(lines) > 0:
+            # print('\tOPEN-END MUTUAL FUNDS')
+            self.__add_stock(lines, 'mutual fund')
+        
+        lines = holding['MUTUAL FUNDS']['children']['OPEN-END NON-SWEEP MONEY MARKET FUNDS']['lines']
+        if len(lines) > 0:
+            # print('\tOPEN-END NON-SWEEP MONEY MARKET FUNDS')
+            self.__add_stock(lines, 'money market fund')
+        
+        lines = holding['GOVERNMENT SECURITIES']['children']['TREASURY SECURITIES']['lines']
+        if len(lines) > 0:
+            # print('\tTREASURY SECURITIES')
+            self.__add_bill(lines, 't bill')
+        
+        lines = holding['CERTIFICATES OF DEPOSIT']['lines']
+        if len(lines) > 0:
+            # print('\tCERTIFICATES OF DEPOSIT')
+            self.__add_bill(lines, 'cd')
+        
+        # 'Holdings'
+        holding = self.__name_pages['Holdings']['children']
+
+        lines = holding['STOCKS']['children']['COMMON STOCKS']['lines']
+        if len(lines) > 0:
+            # print('\tCOMMON STOCKS')
+            self.__add_stock(lines, 'stock')
+
+    def __add_bill(self, lines, bill_type):
+        # add bill data to account holdings
+        account = self.accounts[list(self.accounts.keys())[0]]
+        holding_values = lines[lines.index('Security Description')+1:lines.index('Yield %')+1]
+        lines = lines[lines.index('Yield %')+1:]
+
+        security = None
+        for line_idx in range(len(lines)):
+            line = lines[line_idx]
+            if line.isupper():
+                if not 'CUSIP' in lines[line_idx+1]: continue
+                details = lines[line_idx+1].split(';')
+                # cusip = lines[line_idx+1].split('CUSIP')[1].strip()
+                cusip = details[2].strip().split(' ')[1].strip()
+                mature_date = details[1].strip().split(' ')[1].strip()
+                security = line + ' ' + cusip
+                account['holdings'][security] = {'type': bill_type, 'symbol': cusip, 'date': account['end_date'], 'transactions': []}
+                holding_lines = lines[line_idx+2:line_idx+len(holding_values)+2]
+                account['holdings'][security]['face_value'] = self.__get_float(holding_lines[holding_values.index('Face Value')])
+                account['holdings'][security]['total_cost'] = self.__get_float(holding_lines[holding_values.index('Orig Total Cost')])
+                if bill_type == 'cd':
+                    account['holdings'][security]['rate'] = self.__get_float(details[0].split('  ')[1].strip().rstrip('%'))
+                account['holdings'][security]['mature_date'] = datetime.strptime(mature_date, '%m/%d/%Y')
+            elif bill_type == 't bill' and line.startswith('Issued'):
+                issue_date = line.split(';')[0].split(' ')[1].strip()
+                account['holdings'][security]['issue_date'] = datetime.strptime(issue_date, '%m/%d/%y')
+            elif bill_type == 'cd' and line.startswith('Interest Paid at Maturity'):
+                splits = line.split(';')
+                for split in splits[1:]:
+                    split = split.strip()
+                    if split.startswith('Issued'):
+                        issue_date = split.split(' ')[1].strip()
+                        account['holdings'][security]['issue_date'] = datetime.strptime(issue_date, '%m/%d/%y')
+
+    def __add_stock(self, lines, stock_type):
+        # add stock data to account holdings
+        account = self.accounts[list(self.accounts.keys())[0]]
+        holding_values = lines[lines.index('Security Description')+1:lines.index('Yield %')+1]
+        lines = lines[lines.index('Yield %')+1:]
+        for line_idx in range(len(lines)):
+            line = lines[line_idx]
+            if line.isupper() and ' (' in line:
+                splits = line.split(' (')
+                security = splits[0]
+                account['holdings'][security] = {'type': stock_type, 'symbol': splits[1][:-1], 'date': account['end_date'], 'transactions': []}
+                if lines[line_idx+1] == 'Purchases':
+                    holding_lines = lines[line_idx+1:]
+                    holding_lines = holding_lines[holding_lines.index('Total')+1:]
+                    account['holdings'][security]['quantity'] = self.__get_float(holding_lines[holding_values.index('Quantity')])
+                    account['holdings'][security]['total_cost'] = self.__get_float(holding_lines[holding_values.index('Total Cost')-1])
+                else:
+                    holding_lines = lines[line_idx+1:line_idx+len(holding_values)+1]
+                    account['holdings'][security]['quantity'] = self.__get_float(holding_lines[holding_values.index('Quantity')])
+                    account['holdings'][security]['total_cost'] = self.__get_float(holding_lines[holding_values.index('Total Cost')])
+                if stock_type == 'money market fund':
+                    account['holdings'][security]['total_cost'] = account['holdings'][security]['quantity']
 
     def __get_float(self, text):
         if text.startswith('$'): text = text[1:]
@@ -166,15 +238,42 @@ class Morgan_Stanley():
         except:
             return None
 
-    def __get_last_string_index(self, lines):
-            index = 1
-            lines_reverse = lines.copy()
-            lines_reverse.reverse()
-            for line in lines_reverse:
-                if self.__get_float(line) == None: break
-                index += 1
-            index = -index
-            return index
+    def __set_accounts_info(self):
+        account_type = None
+        account_number = None
+        start_date = None
+        end_date = None
+
+        # get account info
+        lines = self.statement.get_page_lines(self.__name_pages['Account Summary']['pages'][0])
+        for line_idx in range(len(lines)):
+            line = lines[line_idx]
+            if account_type == None and 'Account' in line:
+                account_type = line
+                account_number = lines[line_idx+1]
+            if 'For the Period' in line:
+                period = line.split('For the Period ')[-1].strip()
+                splits = period.split(',')
+                year = splits[1].strip()
+                splits = splits[0].split('-')
+                
+                start_date = splits[0].strip().split(' ')
+
+                end_date = splits[1].strip().split(' ')
+                if len(end_date) > 1:
+                    end_date = '%s/%s/%s' % (end_date[0].strip(), end_date[1].strip(), year)
+                else:
+                    end_date = '%s/%s/%s' % (start_date[0].strip(), end_date[0].strip(), year)
+                end_date = datetime.strptime(end_date, '%B/%d/%Y')
+
+                start_date = '%s/%s/%s' % (start_date[0].strip(), start_date[1].strip(), year)
+                start_date = datetime.strptime(start_date, '%B/%d/%Y')
+        self.accounts[account_number] = {
+            'type': account_type,
+            'start_date': start_date,
+            'end_date': end_date,
+            'holdings': {},
+        }
 
     def __set_name_pages(self):
         self.__name_pages = {
@@ -310,6 +409,10 @@ class Morgan_Stanley():
             'Holdings': {
                 'pages': [],
                 'children': {
+                    'CASH, DEPOSITS AND MONEY MARKET FUNDS': {
+                        'stop': 'CASH, DEPOSITS AND MONEY MARKET FUNDS',
+                        'lines': [],
+                    },
                     'STOCKS': {
                         'stop': 'STOCKS',
                         'lines': [],
@@ -387,9 +490,9 @@ class Morgan_Stanley():
                         blocks = self.statement.get_page_blocks(page_num)
                         for block in blocks:
                             lines += block
-                    self.recurse_lines(page_data['children'], lines)
+                    self.__recurse_lines(page_data['children'], lines)
     
-    def recurse_lines(self, name_pages, lines):
+    def __recurse_lines(self, name_pages, lines):
         current_name = None
         for line in lines:
             
@@ -408,37 +511,4 @@ class Morgan_Stanley():
 
         for name, name_data in name_pages.items():
             if 'children' in name_data:
-                self.recurse_lines(name_data['children'], name_data['lines'])
-
-    def __set_account_info(self):
-        self.__set_name_pages()
-        self.account_type = None
-        self.account_number = None
-        self.start_date = None
-        self.end_date = None
-
-        # get account info
-        lines = self.statement.get_page_lines(self.__name_pages['Account Summary']['pages'][0])
-        for line_idx in range(len(lines)):
-            line = lines[line_idx]
-            if self.account_type == None and 'Account' in line:
-                self.account_type = line
-                self.account_number = lines[line_idx+1]
-            if 'For the Period' in line:
-                period = line.split('For the Period ')[-1].strip()
-                splits = period.split(',')
-                year = splits[1].strip()
-                splits = splits[0].split('-')
-                
-                self.start_date = splits[0].strip().split(' ')
-
-                self.end_date = splits[1].strip().split(' ')
-                if len(self.end_date) > 1:
-                    self.end_date = '%s/%s/%s' % (self.end_date[0].strip(), self.end_date[1].strip(), year)
-                else:
-                    self.end_date = '%s/%s/%s' % (self.start_date[0].strip(), self.end_date[0].strip(), year)
-                self.end_date = datetime.strptime(self.end_date, '%B/%d/%Y')
-
-                self.start_date = '%s/%s/%s' % (self.start_date[0].strip(), self.start_date[1].strip(), year)
-                self.start_date = datetime.strptime(self.start_date, '%B/%d/%Y')
-
+                self.__recurse_lines(name_data['children'], name_data['lines'])
