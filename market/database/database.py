@@ -72,6 +72,18 @@ class Database():
         except FileNotFoundError:
             pass
 
+    def table_write_df(self, table_name, df):
+        # create dtypes
+        dtypes = df.dtypes
+        dtypes[df.index.name] = df.index.dtype
+        dtypes = dtypes.to_frame('types')
+        dtypes['sql'] = dtypes['types'].apply(lambda x: self.sql_data_typesPD[x.type])
+        dtypes = dtypes['sql'].to_dict()
+        dtypes[df.index.name] += ' PRIMARY KEY'
+
+        # create table
+        df.to_sql(table_name, self.connection, if_exists='replace', index=True, dtype=dtypes)
+
     def table_write(self, table_name, data, key_name, method='append'):
         # if data is empty, do nothing
         if len(data) == 0:

@@ -86,6 +86,17 @@ class Catalog():
         return data
 
     catalog = {
+        'update_yf': {
+            'info': 'chart test info',
+            'sets': {
+                'YahooF_Chart': {
+                    'scrapes': {
+                        YahooF_Chart: {'tables': {'all': {},}},
+                        YahooF_Info: {'tables': {'all': {},}},
+                    },
+                },
+            },
+        },
         'chart': {
             'info': 'chart info',
             'post_procs': [[merge, {}]],

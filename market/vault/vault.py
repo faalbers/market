@@ -23,7 +23,7 @@ class Vault():
 
     def update(self, catalogs=[], key_values=[]):
         # gather scrape classes
-        scraper_classes_data = {Yahoo: [], FMP: [], Polygon: [], File: [], Finviz: [], Fred: []}
+        scraper_classes_data = {Yahoo: [], YahooF: [], FMP: [], Polygon: [], File: [], Finviz: [], Fred: []}
         for catalog in catalogs:
             catalog_data =  self.catalog.get_catalog(catalog)
             if len(catalog_data) > 0:
@@ -73,7 +73,7 @@ class Vault():
             self.close_scrape_database(scrape_class)
 
     def get_data(self, catalogs=[], key_values=[], update=False):
-        # NOTE: should we have it handle only one catalog instead of list also ?
+        # TODO: should we have it handle only one catalog instead of list also ?
         
         if update : self.update(catalogs, key_values)
 
