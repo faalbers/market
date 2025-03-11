@@ -3,7 +3,7 @@ from ...utils import stop_text
 
 class YahooF():
     @sleep_and_retry
-    @limits(calls=150, period=60)
+    @limits(calls=120, period=60)
     # @limits(calls=2, period=1)
     def exec_proc(self, proc, arguments):
         return proc(**arguments)
@@ -23,9 +23,9 @@ class YahooF():
             symbol = exec[0]
             proc = exec[1]
             arguments = exec[2]
-            success, result = self.exec_proc(proc, arguments)
-            self.push_api_data(symbol, success, result)
-            if not success:
+            result = self.exec_proc(proc, arguments)
+            self.push_api_data(symbol, result)
+            if not result[0]:
                 failed += 1
                 failed_total += 1
             count_done += 1

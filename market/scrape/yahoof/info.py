@@ -1,5 +1,5 @@
 from .yahoof import YahooF
-import logging
+import logging, time
 from ...database import Database
 from pprint import pp
 import yfinance as yf
@@ -13,38 +13,35 @@ class YahooF_Info(YahooF):
     def get_table_names(table_name):
         return [table_name]
     
-    # statcmethod
-    def get_info(symbol):
-        ticker = yf.Ticker(symbol)
-        try:
-            info = ticker.info
-        except:
-            return (False, None)
-        return (True, info)
+    def get_info(self, symbol):
+        while True:
+            ticker = yf.Ticker(symbol)
+            try:
+                info = ticker.info
+            except Exception as e:
+                if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
+                    self.logger.info('YahooF:  Rate Limeit: wait 120 seconds')
+                    time.sleep(120)
+                    continue
+                else:
+                    return ([False, None, e])
 
-        # try:
-        #     data = yf.download(ticker)
-        #     return data
-        # except HTTPError as e:
-        #     if e.response.status_code == 429 or e.response.status_code == 503:
-        #         print(f"Rate limit hit or service unavailable. Retrying in {retry_delay} seconds...")
-        #         time.sleep(retry_delay)
-        #     else:
-        #         print(f"HTTP error occurred: {e}")
-        #         break  # Exit the loop for non-retryable HTTP errors
-        # except Exception as e:
-        #      print(f"An unexpected error occurred: {e}")
-        #      break # Exit the loop for unexpected errors
-    
+            return ([True, info, 'ok'])
+                    
     def __init__(self, key_values=[], table_names=[]):
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
         self.db = Database(self.dbName)
 
-        # # make yfinance non verbose
-        # yflogger = logging.getLogger('yfinance')
+        # make yfinance non verbose
+        yflogger = logging.getLogger('yfinance')
         # yflogger.disabled = True
         # yflogger.propagate = False
+        file_handler = logging.FileHandler('yfinance.log')
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s: %(levelname)s:\t%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        file_handler.setFormatter(formatter)
+        yflogger.addHandler(file_handler)
 
         # check what symbols need to be updated
         symbols = self.update_check(key_values)
@@ -53,11 +50,14 @@ class YahooF_Info(YahooF):
         self.logger.info('YahooF:  Info: update')
         self.logger.info('YahooF:  Info: symbols processing : %s' % len(symbols))
 
-        exec_list = [[symbol, YahooF_Info.get_info, {'symbol': symbol}] for symbol in symbols]
+        # backup first
+        self.db.backup()
+
+        exec_list = [[symbol, self.get_info, {'symbol': symbol}] for symbol in symbols]
         self.multi_execs(exec_list)
 
     def update_check(self, symbols):
-        db_status = self.db.table_read('status_db', key_values=symbols)
+        db_status = self.db.table_read('status_db')
         
         # found is 24 h check
         found_update = int(datetime.now().timestamp()) - 86400
@@ -79,10 +79,21 @@ class YahooF_Info(YahooF):
 
         return update_symbols
 
-    def push_api_data(self, symbol, success, result):
+    def push_api_data(self, symbol, result):
+        print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ': ', symbol)
         timestamp = int(datetime.now().timestamp())
-        self.db.table_write('status_db', {symbol: {'timestamp': timestamp, 'found': success}}, key_name='symbol', method='update')
-        if not success: return
+        found = result[0]
+        status_info = {
+            'timestamp': timestamp,
+            'found': found,
+            'message': str(result[2])
+        }
+
+        self.db.table_write('status_db', {symbol: status_info}, key_name='symbol', method='update')
+        if not found:
+            print('\t%s' % result[2])
+            return
+        result = result[1]
         
         result['timestamp'] = timestamp
         self.db.table_write('info', {symbol: result}, key_name='symbol', method='replace')

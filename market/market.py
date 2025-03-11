@@ -9,7 +9,7 @@ import pandas as pd
 from langchain_ollama import OllamaLLM
 from .utils import stop_text
 from .analysis import Analysis
-# from .quicken import Quicken
+from .quicken import Quicken
 from .report import Report
 from .portfolio import Portfolio
 
@@ -56,7 +56,7 @@ class Market():
         self.builtin_excepthook =   sys.excepthook
         sys.excepthook = Market.excepthook
 
-        self.logger.info('Market: start logging')
+        # self.logger.info('Market: start logging')
 
     def __init__(self):
         self.__setup_logger()
@@ -102,7 +102,15 @@ class Market():
             if symbol_data['market'] in {'crypto', 'fx'}: continue
             if 'locale' in symbol_data and symbol_data['locale'] == 'us': symbols.add(symbol)
         
-        return Tickers(symbols)
+        # fix symbol names
+        symbols_fixed = set()
+        for symbol in symbols:
+            if symbol.startswith('I:'):
+                symbol = '^' + symbol[2:]
+            symbols_fixed.add(symbol)
+
+        # fix some names
+        return Tickers(symbols_fixed)
 
     def get_scraped_tickers(self):
         data_symbols = self.vault.get_data(['symbols'])['symbols']
@@ -232,6 +240,9 @@ class Market():
     
     def make_portfolio(self):
         Portfolio()
+    
+    def get_quicken(self, qif_file):
+        return Quicken(qif_file)
         
     # def statements(self):
     #     # pdf_files = glob.glob('database/statements/*.pdf')
@@ -244,3 +255,7 @@ class Market():
     #         print(len(statement.lines))
     #         found_lines = statement.find_lines(['E*TRADE', 'ETRADE', '1-800-ETRADE', 'Morgan Stanley', 'Fidelity', 'Customer Update:'])
     #         print(found_lines)
+
+    def make_data_report(self):
+        tickers = self.get_scraped_tickers()
+        tickers.make_data_report()

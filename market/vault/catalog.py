@@ -91,7 +91,7 @@ class Catalog():
             'sets': {
                 'YahooF_Chart': {
                     'scrapes': {
-                        YahooF_Chart: {'tables': {'all': {},}},
+                        # YahooF_Chart: {'tables': {'all': {},}},
                         YahooF_Info: {'tables': {'all': {},}},
                     },
                 },

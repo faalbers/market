@@ -1,5 +1,5 @@
 from .yahoof import YahooF
-import logging
+import logging, time
 from ...database import Database
 from pprint import pp
 import yfinance as yf
@@ -13,35 +13,54 @@ class YahooF_Chart(YahooF):
     def get_table_names(table_name):
         return [table_name]
     
-    # statcmethod
-    def get_chart(symbol):
-        ticker = yf.Ticker(symbol)
-        chart = ticker.history(period="10y")
-        if chart.shape[0] == 0: return (False, None)
-        return (True, chart)
+    def get_chart(self, symbol):
+        while True:
+            try:
+                ticker = yf.Ticker(symbol)
+                chart = ticker.history(period="10y")
+            except Exception as e:
+                if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
+                    self.logger.info('YahooF:  Rate Limeit: wait 60 seconds')
+                    time.sleep(60)
+                    continue
+                else:
+                    return ([False, None, e])
+            if chart.shape[0] == 0:
+                return ([False, None, 'empty'])
+            return ([True, chart, 'ok'])
 
     def __init__(self, key_values=[], table_names=[]):
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
         self.db = Database(self.dbName)
 
-        # # make yfinance non verbose
-        # yflogger = logging.getLogger('yfinance')
+        # make yfinance log into a file
+        yflogger = logging.getLogger('yfinance')
         # yflogger.disabled = True
         # yflogger.propagate = False
-
+        
+        file_handler = logging.FileHandler('yfinance.log')
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s: %(levelname)s:\t%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        file_handler.setFormatter(formatter)
+        yflogger.addHandler(file_handler)
+        
         # check what symbols need to be updated
         symbols = self.update_check(key_values)
+        # symbols = key_values
         if len(symbols) == 0: return
 
         self.logger.info('YahooF:  Chart: update')
         self.logger.info('YahooF:  Chart: symbols processing : %s' % len(symbols))
 
-        exec_list = [[symbol, YahooF_Chart.get_chart, {'symbol': symbol}] for symbol in symbols]
+        # backup first
+        self.db.backup()
+
+        exec_list = [[symbol, self.get_chart, {'symbol': symbol}] for symbol in symbols]
         self.multi_execs(exec_list)
 
     def update_check(self, symbols):
-        db_status = self.db.table_read('status_db', key_values=symbols)
+        db_status = self.db.table_read('status_db')
         
         # found is 24 h check
         found_update = int(datetime.now().timestamp()) - 86400
@@ -63,10 +82,18 @@ class YahooF_Chart(YahooF):
 
         return update_symbols
 
-    def push_api_data(self, symbol, success, result):
+    def push_api_data(self, symbol, result):
+        # print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ': ', symbol)
         timestamp = int(datetime.now().timestamp())
-        self.db.table_write('status_db', {symbol: {'timestamp': timestamp, 'found': success}}, key_name='symbol', method='update')
-        if not success: return
+        found = result[0]
+        status_info = {
+            'timestamp': timestamp,
+            'found': found,
+            'message': str(result[2])
+        }
+        self.db.table_write('status_db', {symbol: status_info}, key_name='symbol', method='update')
+        if not found: return
+        result = result[1]
 
         # make unique table name
         table_name = 'chart_'

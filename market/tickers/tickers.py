@@ -27,6 +27,9 @@ class Tickers():
 
     def get_profiles(self, update=False):
         return self.vault.get_data(['profile'], self.symbols, update=update)['profile']
+    
+    def get_prices(self, update=False):
+        return self.vault.get_data(['price'], self.symbols, update=update)['price']
 
     def get_chart(self, start_date=None, end_date=None, update=False):
         chart_data = self.vault.get_data(['chart'], self.symbols, update=update)['chart']
@@ -82,7 +85,7 @@ class Tickers():
         return self.vault.get_data(['revenue_growth'], self.symbols)['revenue_growth']
     
     def update(self, catalogs):
-        self.vault.update(catalogs, self.symbols)
+        self.vault.update(catalogs, sorted(self.symbols))
 
     def make_data_report(self):
         all_data = self.get_all()

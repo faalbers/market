@@ -1,4 +1,4 @@
-import requests, os, pickle
+import requests, os, pickle, random
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from ratelimit import limits, sleep_and_retry
@@ -15,7 +15,9 @@ class Yahoo():
         # if they dont exist or if they are expired, refresh
         yconfig_file = 'database/yahoo.pickle'
         yconfig = None
-        headers = {'User-Agent': const.YAHOO_USER_AGENT}
+        # headers = {'User-Agent': const.YAHOO_USER_AGENT}
+        # headers = {'User-Agent': random.choice( const.YAHOO_USER_AGENTS)}
+        headers = {'User-Agent': const.YAHOO_USER_AGENTS[1]}
         if os.path.exists(yconfig_file):
             with open(yconfig_file, 'rb') as f:
                 yconfig = pickle.load(f)
@@ -71,6 +73,8 @@ class Yahoo():
                     failed += 1
                     failed_total += 1
             else:
+                print(request_arguments)
+                pp(response.text)
                 self.logger.info('Yahoo:   %s: unknown request response' % symbol)
                 self.logger.info('Yahoo:   %s: status code: %s' % (symbol, response.status_code))
                 self.logger.info('Yahoo:   %s: content type: %s' % (symbol, response.headers.get('content-type')))
