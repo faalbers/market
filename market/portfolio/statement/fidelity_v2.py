@@ -3,16 +3,17 @@ from pprint import pp
 import math, copy
 import pandas as pd
 
-class Merrill_Lynch():
-    name = 'Merrill_Lynch'
+class Fidelity_V2():
+    name = 'Fidelity_V2'
 
     def __init__(self, statement):
         self.statement = statement
         self.accounts = {}
 
-        # if self.statement.pdf_file != 'database/statements_ml\\7WA 15527-2013-10-12.pdf': return
+        if self.statement.pdf_file != 'database/statements_fi\\UNIQUE_2014_3QTR.pdf': return
 
-        # return
+        # TODO text does not seem to be sequential AT ALL, will tackle this later
+        return
 
         print('')
         print('%s: %s' % (self.name, self.statement.pdf_file))
@@ -22,61 +23,44 @@ class Merrill_Lynch():
         self.__set_holdings()
 
         # pp(self.__name_pages['accounts'])
-        pp(self.accounts)
+        # pp(self.accounts)
 
     def __set_holdings(self):
         for account_number, account_data in self.__name_pages['accounts'].items():
             # print('%s' % account_number)
             children = account_data['Account']['children']
 
-            lines = children['EQUITIES']['lines']
+            lines = children['Holdings']['lines']
             if len(lines) > 0:
-                print('\tEQUITIES')
-                self.__add_stock(lines, account_number)
+                # print('\tHoldings')
+                self.__add_holdings_other(lines, account_number, 'Holdings')
 
-    def __add_stock(self, lines, account_number):
-        # add core data to account holdings
+    def __add_holdings_other(self, lines, account_number, page_name):
+        # add other holdings data to account holdings
         account = self.accounts[account_number]
-
-        # not even parsing since it's always only one
-        lines = lines[lines.index('Yield%')+1:]
-        security = lines[0].strip()
-        symbol = lines[1].strip()
-        quantity = self.__get_float(lines[3].strip())
-        account['holdings'][security] = {
-            'type': 'stock', 'symbol': symbol, 'cusip': None, 'date': account['end_date'], 'quantity': quantity, 'transactions': []}
-
-    def __get_float(self, text):
-        text = text.replace('$', '')
-        text = text.replace(',', '')
-        try:
-            return float(text)
-        except:
-            return None
+        for line in lines:
+            print('\t\t%s' % line)
 
     def __set_accounts_info(self):
+        # HACK Not handling this anomaly
+        if len(self.__name_pages['accounts']) == 0: return
         date_string = None
         for account_number, account_data in self.__name_pages['accounts'].items():
-            self.accounts[account_number] = {'type': 'INDIVIDUAL INVESTOR ACCOUNT', 'holdings': {}}
-            if date_string == None:
-                page_num = account_data['Account']['pages'][0]
-                for block in self.statement.get_page_blocks(page_num):
-                    if block[0].startswith('INDIVIDUAL INVESTOR ACCOUNT') and ' - ' in block[1]:
-                        date_string = block[1].strip()
-                        break
-                    if ' - ' in block[0]:
-                        date_string = block[0].strip()
-                        break
-                    if len(block) > 1 and block[1].startswith('- '):
-                        date_string = ' '.join(block[:2]).strip()
-                        break
+            self.accounts[account_number] = {'holdings': {}}
+            page_num = account_data['Account']['pages'][0]
+            for block in self.statement.get_page_blocks(page_num):
+                if len(block) == 2 and block[1] == account_number:
+                    self.accounts[account_number]['type'] = block[0].strip()
+                if date_string == None and ' - ' in block[0] and block[0].count(' - ') == 1:
+                    if block[0][-4:].isdigit():
+                        date_string = block[0]
         dates = date_string.split(' - ')
         start_date = datetime.strptime(dates[0].strip(), '%B %d, %Y')
         end_date = datetime.strptime(dates[1].strip(), '%B %d, %Y')
         for account_number, account_data in self.accounts.items():
             account_data['start_date'] = start_date
             account_data['end_date'] = end_date
-
+    
     def __set_name_pages(self):
         # search structure:
         # key words under children are the start key words of blocks of lines
@@ -87,8 +71,8 @@ class Merrill_Lynch():
             'Account': {
                 'pages': [],
                 'children': {
-                    'EQUITIES': {
-                        'stop': 'TOTAL',
+                    'Holdings': {
+                        'stop': 'Transaction Details',
                         'lines': [],
                     },
                 },
@@ -96,24 +80,21 @@ class Merrill_Lynch():
         }
 
         for page_num, blocks in self.statement.get_blocks().items():
-            for block_idx in range(len(blocks)):
-                block = blocks[block_idx]
-                if block[0].startswith('Account'):
-                    account_number = block[0]
-                    if len(account_number) <= 15:
-                        account_number = ' '.join(block[0:2])
-                    account_number = account_number.split(':')[1].strip()
-                    if account_number not in self.__name_pages['accounts']:
-                        self.__name_pages['accounts'][account_number] = {}
-                        self.__name_pages['accounts'][account_number]['Account'] = copy.deepcopy(self.__name_pages['Account'])
-                    self.__name_pages['accounts'][account_number]['Account']['pages'].append(page_num)
-                    break
+            for block in blocks:
+                # print(page_num, block)
+                if len(block) == 2:
+                    account_number = block[1]
+                    if account_number.replace('-', '').isdigit():
+                        if account_number not in self.__name_pages['accounts']:
+                            self.__name_pages['accounts'][account_number] = {}
+                            self.__name_pages['accounts'][account_number]['Account'] = copy.deepcopy(self.__name_pages['Account'])
+                        self.__name_pages['accounts'][account_number]['Account']['pages'].append(page_num)
+                        break
 
         for account_number, account_data in self.__name_pages['accounts'].items():
             for pages_name, page_data in account_data.items():
                 if len(page_data['pages']) > 0:
                     if len(page_data['children']) > 0:
-                        print(page_data['pages'])
                         lines = []
                         for page_num in page_data['pages']:
                             blocks = self.statement.get_page_blocks(page_num)
@@ -132,30 +113,28 @@ class Merrill_Lynch():
         for line in lines:
             if current_name != None:
                 if 'stop' in name_pages[current_name]:
-                    if line == name_pages[current_name]['stop']:
-                        print('stop: %s - with: %s' % (current_name, line))
+                    if line.startswith(name_pages[current_name]['stop']):
                         name_pages[current_name]['lines'] = current_lines
                         current_name = None
                         current_lines = []
                         continue
             
-            if line in name_pages:
-                print('start: new: %s - old: %s' % (line, current_name))
-                current_name = line
-                current_lines = []
-                continue
+            found_start = False
+            # check if current lines block should start
+            # go through start keywords and check if line starts with it
+            for key in name_pages.keys():
+                if line.startswith(key):
+                    print(key)
+                    current_name = key
+                    found_start = True
+                    break
+            # since this line is a start key, skip it
+            if found_start: continue
 
             if current_name != None:
+                print(line)
                 current_lines.append(line)
         
-        if current_name != None:
-            pass
-            # raise Exception('last current name not stopped: %s' % current_name)
-            # print('%s: %s' % (self.name, self.statement.pdf_file))
-            # print(current_name)
-            # for line in current_lines:
-            #     print('\t%s' % line)
-
         for name, name_data in name_pages.items():
             if 'children' in name_data:
                 self.__recurse_lines(name_data['children'], name_data['lines'])

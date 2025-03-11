@@ -1,6 +1,6 @@
 from datetime import datetime
 from pprint import pp
-import math
+import math, copy
 import pandas as pd
 
 class Etrade():
@@ -9,60 +9,44 @@ class Etrade():
     def __init__(self, statement):
         self.statement = statement
         self.accounts = {}
-        if self.statement.pdf_file != 'database/statements_ms\\Etrade-7273_TRUST_2015-02.pdf': return
-        # print('%s: %s' % (self.name, self.statement.pdf_file))
-        # self.__test()
-        # self.__set_name_pages()
-        # self.__test_b()
-        # return
-    
-        # print('')
-        # print('%s: %s' % (self.name, self.statement.pdf_file))
 
+        # if self.statement.pdf_file != 'database/statements_ms\\Etrade 2014-07-08.pdf': return
+        # if self.statement.pdf_file != 'database/statements_ms\\RO_2022_11.pdf': return
+
+        # return
+
+        print('')
+        print('%s: %s' % (self.name, self.statement.pdf_file))
+    
         self.__set_name_pages()
         self.__set_accounts_info()
         self.__set_holdings()
         self.__set_transactions()
 
+        # pp(self.__name_pages['accounts'])
         # pp(self.accounts)
 
-    def __test_b(self):
-        holdings = self.__name_pages['Account Number']['children']
-
-        lines = holdings['MUTUAL FUNDS  (']['lines']
-        for line in lines:
-            print('\t%s' % line)
-
-    def __test(self):
-        found = False
-        for line in self.statement.get_lines():
-            if line.startswith('MUTUAL FUNDS PURCHASED OR SOLD'):
-                found = True
-            if found and line.startswith('TOTAL MUTUAL FUNDS ACTIVITY'):
-                found = False
-            # if found and line.startswith('TOTAL PRICED PORTFOLIO HOLDINGS ('):
-            #     found = False
-            # if found and line.startswith('OTHER ACTIVITY'):
-            #     found = False
-        if found: print(self.statement.pdf_file)
-
     def __set_transactions(self):
-        name_page_children = self.__name_pages['Account Number']['children']
+        for account_number, account_data in self.__name_pages['accounts'].items():
+            # print(account_number)
+            
+            children = account_data['Account Number:']['children']
+            
+            activities = [
+                'SECURITIES PURCHASED OR SOLD',
+                'MUTUAL FUNDS PURCHASED OR SOLD',
+                'DIVIDENDS & INTEREST ACTIVITY',
+                'OTHER ACTIVITY',
+            ]
 
-        activities = [
-            'SECURITIES PURCHASED OR SOLD',
-            'MUTUAL FUNDS PURCHASED OR SOLD',
-            'DIVIDENDS & INTEREST ACTIVITY',
-            'OTHER ACTIVITY',
-        ]
+            for activity in activities:
+                lines = children[activity]['lines']
+                if len(lines) > 0:
+                    print('\t%s' % activity)
+                    self.__get_transactions(lines, account_number)
 
-        for activity in activities:
-            lines = name_page_children[activity]['lines']
-            if len(lines) > 0:
-                # print('\t%s' % activity)
-                self.__add_transactions(lines)
-        
-    def __add_transactions(self, lines):
+    def __get_transactions(self, lines, account_number):
+        account = self.accounts[account_number]
         last_index = None
         current_transaction = {}
         found_float = True
@@ -83,7 +67,7 @@ class Etrade():
                         # we got to the next Transaction Date
                         # store the last one and create a new one
                         self.__parse_transaction(current_transaction)
-                        self.__add_transaction(current_transaction)
+                        # self.__add_transaction(current_transaction)
                         current_transaction = {'transaction_date': date, 'lines': []}
                 else:
                     # this is the first Transaction Date, create a new one
@@ -102,32 +86,11 @@ class Etrade():
         # make sure the last transaction is added if needed
         if 'transaction_date' in current_transaction:
             self.__parse_transaction(current_transaction)
-            self.__add_transaction(current_transaction)
-
-    def __add_transaction(self, transaction):
-        if not 'type' in transaction: return
-        account = self.accounts[list(self.accounts.keys())[0]]
-        security = transaction.pop('security')
-        symbol = transaction.pop('symbol')
-        if security in account['holdings']:
-            # print(security)
-            # for security in account['holdings']:
-            #     print('\t%s' % security)
-            if symbol != None and account['holdings'][security]['symbol'] != symbol:
-                account['holdings'][security]['symbol'] = symbol
-            account['holdings'][security]['transactions'].append(transaction)
-        else:
-            # print('%s: %s' % (self.name, self.statement.pdf_file))
-            # print(security)
-            # for security in account['holdings']:
-            #     print('\t%s' % security)
-            pass
-            # account['holdings'][security] = {'type': None, 'symbol': None, 'date': account['end_date'], 'transactions': []}
-            # account['holdings'][security]['transactions'].append(transaction)
+            # self.__add_transaction(current_transaction)
 
     def __parse_transaction(self, transaction):
-        self.__trim_transaction_lines(transaction)
         lines = transaction.pop('lines')
+        lines = self.__trim_transaction_lines(lines)
 
         transaction_types = [ 
             'Bought', 'Sold', # 'SECURITIES PURCHASED OR SOLD', 'MUTUAL FUNDS PURCHASED OR SOLD'
@@ -149,22 +112,25 @@ class Etrade():
         # get security , symbol and values
         if type_idx == 0:
             transaction['symbol'] = lines[-2]
+            transaction['symbol'], transaction['cusip'] = self.__get_symbol_cusip(transaction['symbol'])
             transaction['security'] = ' '.join(lines[1:-2]).lstrip('*')
-            transaction['security'], transaction['comments'] = self.__fix_security_name(transaction['security'], transaction['symbol'])
+            # transaction['security'], transaction['comments'] = self.__fix_security_name(transaction['security'], transaction['symbol'])
             values = lines[-1:]
         else:
             transaction['symbol'] = lines[type_idx-1]
+            transaction['symbol'], transaction['cusip'] = self.__get_symbol_cusip(transaction['symbol'])
             transaction['security'] = ' '.join(lines[:type_idx-1]).lstrip('*')
-            transaction['security'], transaction['comments'] = self.__fix_security_name(transaction['security'], transaction['symbol'])
             values = lines[type_idx+1:]
-            
+        transaction['security'], transaction['comments'] = self.__fix_security_name(transaction['security'],
+            transaction['symbol'], transaction['cusip'])
+        
         # handle values
 
         # quantity, price, amount: Bought, Sold
         if transaction_type in ['Bought', 'Sold']:
             transaction['quantity'] = self.__get_float(values[0])
             transaction['price'] = self.__get_float(values[1])
-            transaction['amount'] = self.__get_float(values[2])
+            # transaction['amount'] = self.__get_float(values[2])
 
         # amount: Dividend, Capital Gain, Fee, Cash-in-Lieu
         elif transaction_type in ['Dividend', 'Capital Gain', 'Fee', 'Cash-in-Lieu']:
@@ -187,185 +153,177 @@ class Etrade():
 
         else:
             pass
-            print(transaction['type'])
+            # print(transaction['type'])
         
-        # pp(transaction)
+        pp(transaction)
 
-    def __fix_security_name(self, security, symbol):
+    def __fix_security_name(self, security, symbol, cusip):
         account = self.accounts[list(self.accounts.keys())[0]]
-        for holding in account['holdings']:
-            trim_start = holding
-            holding_symbol = account['holdings'][holding]['symbol']
-            if holding_symbol != None and holding_symbol == symbol:
-                if holding.endswith(symbol):
-                    trim_start = ' '.join(holding.split(' ')[:-1])
-                comments = security.replace(trim_start, '').strip()
-                if comments == '': comments = None
-                return (holding, comments)
-            elif security.startswith(trim_start):
-                comments = security.replace(trim_start, '').strip()
-                if comments == '': comments = None
-                return (holding, comments)
+        for holding, holding_data in account['holdings'].items():
+            if symbol != None and symbol == holding_data['symbol']:
+                if security != holding:
+                    splits = security.split(holding)
+                    if len(splits) == 2:
+                        return (holding, splits[1].strip())
+                    else:
+                        raise Exception('security: %s, holding: %s' % (security, holding))
+                return (holding, None)
+
+            if cusip != None and cusip == holding_data['cusip']:
+                if security != holding:
+                    splits = security.split(holding)
+                    if len(splits) == 2:
+                        return (holding, splits[1].strip())
+                    else:
+                        same_name = ''
+                        for c1, c2 in zip(security, holding):
+                            if c1 != c2: break
+                            same_name += c1
+                        same_name = same_name.strip()
+                        if len(same_name) > 0:
+                            splits = security.split(same_name)
+                            if len(splits) == 2:
+                                return (holding, splits[1].strip())
+                            else:
+                                raise Exception('security: %s, holding: %s' % (security, holding))
+
+                return (holding, None)
+
         return (security, None)
 
-    def __trim_transaction_lines(self, transaction):
+    def __trim_transaction_lines(self, lines):
         index = 0
-        for line in transaction['lines']:
+        for line in lines:
             if 'PAGE ' in line and ' OF ' in line:
-                transaction['lines'] = transaction['lines'][:index]
-                return
+                return lines[:index]
             index += 1
+        return lines
 
     def __set_holdings(self):
-        holdings = self.__name_pages['Account Number']['children']
+        for account_number, account_data in self.__name_pages['accounts'].items():
+            # print(account_number)
 
-        lines = holdings['CASH & CASH EQUIVALENTS  (']['lines']
-        if len(lines) > 0:
-            # print('\tCASH & CASH EQUIVALENTS')
-            self.__add_money_market(lines)
+            children = account_data['Account Number:']['children']
         
-        lines = holdings['CASH & CASH EQUIVALENTS (']['lines']
-        if len(lines) > 0:
-            # print('\tCASH & CASH EQUIVALENTS')
-            self.__add_money_market(lines)
+            lines = children['CASH & CASH EQUIVALENTS  (']['lines']
+            if len(lines) > 0:
+                # print('\tCASH & CASH EQUIVALENTS')
+                self.__add_money_market(lines, account_number, 'CASH & CASH EQUIVALENTS')
+            
+            lines = children['CASH & CASH EQUIVALENTS (']['lines']
+            if len(lines) > 0:
+                # print('\tCASH & CASH EQUIVALENTS')
+                self.__add_money_market(lines, account_number, 'CASH & CASH EQUIVALENTS')
 
-        lines = holdings['STOCKS, OPTIONS & EXCHANGE-TRADED FUNDS']['lines']
-        if len(lines) > 0:
-            # print('\tSTOCKS, OPTIONS & EXCHANGE-TRADED FUNDS')
-            self.__add_stock(lines, 'stock', 'YIELD (%)')
+            lines = children['STOCKS, OPTIONS & EXCHANGE-TRADED FUNDS']['lines']
+            if len(lines) > 0:
+                # print('\tSTOCKS, OPTIONS & EXCHANGE-TRADED FUNDS')
+                self.__add_stock(lines, account_number, 'stock', 'YIELD (%)', 'STOCKS, OPTIONS & EXCHANGE-TRADED FUNDS')
 
-        lines = holdings['MUTUAL FUNDS  (']['lines']
-        if len(lines) > 0:
-            # print('\tMUTUAL FUNDS')
-            self.__add_stock(lines, 'mutual fund', 'INCOME')
+            lines = children['MUTUAL FUNDS  (']['lines']
+            if len(lines) > 0:
+                # print('\tMUTUAL FUNDS')
+                self.__add_stock(lines, account_number, 'mutual fund', 'INCOME', 'MUTUAL FUNDS')
 
-        lines = holdings['MUTUAL FUNDS (']['lines']
-        if len(lines) > 0:
-            # print('\tMUTUAL FUNDS')
-            self.__add_stock(lines, 'mutual fund', 'INCOME')
-        
-        lines = holdings['TREASURIES']['lines']
-        if len(lines) > 0:
-            # print('\tTREASURIES')
-            self.__add_bill(lines, 't bill')
+            lines = children['MUTUAL FUNDS (']['lines']
+            if len(lines) > 0:
+                # print('\tMUTUAL FUNDS')
+                self.__add_stock(lines, account_number, 'mutual fund', 'INCOME', 'MUTUAL FUNDS')
+            
+            lines = children['TREASURIES']['lines']
+            if len(lines) > 0:
+                # print('\tTREASURIES')
+                self.__add_bill(lines, account_number, 't bill', 'YIELD (%)', 'TREASURIES')
 
-        lines = holdings['CD']['lines']
-        if len(lines) > 0:
-            # print('\tCD')
-            self.__add_bill(lines, 'cd')
+            lines = children['CD']['lines']
+            if len(lines) > 0:
+                # print('\tCD')
+                self.__add_bill(lines, account_number, 'cd', 'YIELD (%)', 'CD')
 
-    def __add_money_market(self, lines):
-        # for line in lines:
-        #     print('\t%s' % line)
-        # add cash data to account holdings
-        account_number = list(self.accounts.keys())[0]
+    def __add_money_market(self, lines, account_number, page_name):
         account = self.accounts[account_number]
-        
-        account_line = 'Account Number:  '+account_number
-        new_lines = []
+
+        # find start string and remove start and pages
         if 'AMOUNT' in lines:
             start_string = 'AMOUNT'
         elif 'BALANCE' in lines:
             start_string = 'BALANCE'
-        else:
-            raise Exception('No AMOUNT or BALANCE start string in money market holdings')
-        while start_string in lines:
-            lines = lines[lines.index(start_string)+1:]
-            if account_line in lines:
-                new_lines += lines[:lines.index(account_line)-1]
-                lines = lines[lines.index(account_line):]
-            else:
-                new_lines += lines
+        lines = self.__trim_lines(lines, page_name, start_string)
+
+        # HACK but it works, no new statements will be this class
         mmfs = {
             'VANGUARD MONEY MKT RESERVES': ['VANGUARD MONEY MARKET RESERVES INC-FEDERAL', 'VMFXX'],
             'VANGUARD ADMIRAL US TREAS FD': ['VANGUARD TREASURY MONEY MARKET FUND', 'VUSXX'],
             'VANGUARD TRSY MMF INVSTR SHRS': ['VANGUARD TREASURY MONEY MARKET FUND', 'VUSXX'],
             'JPM LIQUID ASSET FD E*TRADE CL': ['JPMORGAN TR II LIQUID ASSETS MONEY MKT FD ETRADE CL', 'JLEXX'],
         }
-        for line_idx in range(len(new_lines)):
-            line = new_lines[line_idx]
+        for line_idx in range(len(lines)):
+            line = lines[line_idx]
             if line in mmfs.keys():
                 security = mmfs[line][0]
                 symbol = mmfs[line][1]
+                symbol, cusip = self.__get_symbol_cusip(symbol)
                 mmf_idx = line_idx
                 quantity = None
-                while mmf_idx < len(new_lines) and quantity == None:
-                    if new_lines[mmf_idx] == 'Closing Balance':
-                        quantity = self.__get_float(new_lines[mmf_idx+2])
+                while mmf_idx < len(lines) and quantity == None:
+                    if lines[mmf_idx] == 'Closing Balance':
+                        quantity = self.__get_float(lines[mmf_idx+2])
                     mmf_idx += 1
                 account['holdings'][security] = {
-                    'type': 'money market fund', 'symbol': symbol, 'quantity': quantity, 'total_cost': quantity, 'transactions': []}
-                
-    def __add_stock(self, lines, stock_type, start_string):
-        # add stock data to account holdings
-        account_number = list(self.accounts.keys())[0]
-        account = self.accounts[account_number]
-        
-        account_line = 'Account Number:  '+account_number
-        new_lines = []
-        while start_string in lines:
-            lines = lines[lines.index(start_string)+1:]
-            if account_line in lines:
-                new_lines += lines[:lines.index(account_line)-1]
-                lines = lines[lines.index(account_line):]
-            else:
-                new_lines += lines
+                    'type': 'money market fund', 'symbol': symbol, 'cusip': cusip, 'quantity': quantity, 'date': account['end_date'], 'total_cost': quantity, 'transactions': []}
 
-        while len(new_lines) > 0:
-            new_lines[0] = new_lines[0].lstrip('*')
-            if 'Cash' in new_lines and 'StkPln' in new_lines: next_idx = min(new_lines.index('Cash'), new_lines.index('StkPln'))
-            elif 'Cash' in new_lines and not 'StkPln' in new_lines: next_idx = new_lines.index('Cash')
-            elif not 'Cash' in new_lines and 'StkPln' in new_lines: next_idx = new_lines.index('StkPln')
+
+    def __add_stock(self, lines, account_number, stock_type, start_string, page_name):
+        account = self.accounts[account_number]
+        lines = self.__trim_lines(lines, page_name, start_string)
+
+        while len(lines) > 0:
+            lines[0] = lines[0].lstrip('*')
+            if 'Cash' in lines and 'StkPln' in lines: next_idx = min(lines.index('Cash'), lines.index('StkPln'))
+            elif 'Cash' in lines and not 'StkPln' in lines: next_idx = lines.index('Cash')
+            elif not 'Cash' in lines and 'StkPln' in lines: next_idx = lines.index('StkPln')
             else:
                 raise Exception('No Cash or StkPln in stock holdings')
-            security = ' '.join(new_lines[:next_idx-1]).strip()
-            symbol = new_lines[next_idx-1].strip()
-            quantity = self.__get_float(new_lines[next_idx+1])
+            security = ' '.join(lines[:next_idx-1]).strip()
+            symbol = lines[next_idx-1].strip()
+            symbol, cusip = self.__get_symbol_cusip(symbol)
+            quantity = self.__get_float(lines[next_idx+1])
             account['holdings'][security] = {
-                'type': stock_type, 'symbol': symbol, 'quantity': quantity, 'total_cost': None, 'transactions': []}
+                'type': stock_type, 'symbol': symbol, 'cusip': cusip, 'quantity': quantity, 'date': account['end_date'], 'total_cost': None, 'transactions': []}
             next_idx += 2
-            while not new_lines[next_idx].isupper():
+            while not lines[next_idx].isupper():
                 next_idx += 1
-                if next_idx == len(new_lines): break
-            if next_idx != len(new_lines):
-                new_lines = new_lines[next_idx:]
+                if next_idx == len(lines): break
+            if next_idx != len(lines):
+                lines = lines[next_idx:]
             else:
-                new_lines = []
-    
-    def __add_bill(self, lines, bill_type):
+                lines = []
+
+    def __add_bill(self, lines, account_number, bill_type, start_string, page_name):
         # add bill data to holdings
-        account_number = list(self.accounts.keys())[0]
         account = self.accounts[account_number]
-        
-        account_line = 'Account Number:  '+account_number
-        new_lines = []
-        while 'YIELD (%)' in lines:
-            lines = lines[lines.index('YIELD (%)')+1:]
-            if account_line in lines:
-                new_lines += lines[:lines.index(account_line)-1]
-                lines = lines[lines.index(account_line):]
-            else:
-                new_lines += lines
-        
+        lines = self.__trim_lines(lines, page_name, start_string)
+
         if bill_type == 't bill': search_line = 'UNITED STATES'
         elif bill_type == 'cd': search_line = 'JP MORGAN CHASE BANK'
         
-        while len(new_lines) > 0:
-            new_lines = new_lines[1:]
-            if search_line in new_lines:
-                search_line_idx = new_lines.index(search_line)
-                lines = new_lines[:search_line_idx]
-                new_lines = new_lines[search_line_idx:]
+        # chop security lines into sublines and feed to add
+        while search_line in lines:
+            lines = lines[lines.index(search_line):]
+            if search_line in lines[1:]:
+                search_line_idx = lines[1:].index(search_line)+1
+                bill_lines = lines[:search_line_idx]
+                lines = lines[search_line_idx:]
             else:
-                lines = new_lines
-                new_lines = []
-            
-            if bill_type == 't bill': self.__add_t_bill(lines)
-            elif bill_type == 'cd': self.__add_cd(lines)
+                bill_lines = lines
+                lines = []
 
-    def __add_cd(self, lines):
-        # add t bill data to holdings
-        account = self.accounts[list(self.accounts.keys())[0]]
+            if bill_type == 't bill': self.__add_t_bill(bill_lines, account_number)
+            elif bill_type == 'cd': self.__add_cd(bill_lines, account_number)
+
+    def __add_cd(self, lines, account_number):
+        # add cd data to holdings
+        account = self.accounts[account_number]
         
         cash_line_idx = lines.index('Cash')
         values = lines[cash_line_idx+1:]
@@ -386,16 +344,15 @@ class Etrade():
         security = 'JP MORGAN CHASE BANK NA C/D FDIC ' + cusip
         face_value = self.__get_float(values[0])
         account['holdings'][security] = {
-            'type': 'cd', 'symbol': cusip, 'face_value': face_value, 'total_cost': None, 'rate': rate,
+            'type': 'cd', 'symbol': None, 'cusip': cusip, 'face_value': face_value, 'date': account['end_date'], 'total_cost': None, 'rate': rate,
             'issue_date': issue_date, 'mature_date': mature_date, 'transactions': []}
 
-    def __add_t_bill(self, lines):
+    def __add_t_bill(self, lines, account_number):
         # add t bill data to holdings
-        account = self.accounts[list(self.accounts.keys())[0]]
+        account = self.accounts[account_number]
         
         cash_line_idx = lines.index('Cash')
         values = lines[cash_line_idx+1:]
-        # if len(values) < 5: return
 
         reissue_date = None
         for line in lines[1:cash_line_idx]:
@@ -415,9 +372,53 @@ class Etrade():
         if len(values) >= 5:
             face_value = self.__get_float(values[0])
         account['holdings'][security] = {
-            'type': 't bill', 'symbol': cusip, 'face_value': face_value, 'total_cost': None,
+            'type': 't bill', 'symbol': None, 'cusip': cusip, 'face_value': face_value, 'date': account['end_date'], 'total_cost': None,
             'issue_date': issue_date, 'mature_date': mature_date, 'reissue_date': reissue_date, 'transactions': []}
 
+    def __trim_lines(self, lines, page_name, start_string=None):
+        continued = page_name + (' (Continued)')
+        trim_blocks = [] 
+        # cut lines into page blocks
+        while continued in lines:
+            # print('found continued: %s: %s' % (page_name, self.statement.pdf_file))
+            continues_idx = lines.index(continued)
+            trim_block = []
+            # add lines till 'PAGE '
+            for line in lines[:continues_idx]:
+                if line.startswith('PAGE '): break
+                trim_block.append(line)
+            trim_blocks.append(trim_block)
+            lines = lines[continues_idx+1:]
+        # add lines till 'PAGE '
+        trim_block = []
+        for line in lines:
+            if line.startswith('PAGE '): break
+            trim_block.append(line)
+        trim_blocks.append(trim_block)
+
+        new_lines = []
+        # add trim blocks together
+        for block in trim_blocks:
+            if start_string is not None and start_string in block:
+                # trim each block with start string if available
+                new_lines += block[block.index(start_string)+1:]
+            else:
+                new_lines += block
+
+        return new_lines
+
+    def __check_continued(self, lines, page_name, account_number):
+        continued = page_name + (' (Continued)')
+        if continued in lines:
+            message = 'continued in: %s - account: %s - file: %s' % (page_name , account_number, self.statement.pdf_file)
+            raise Exception(message)
+
+
+    def __get_symbol_cusip(self, name):
+        if len(name) == 9:
+            return (None, name)
+        return (name, None)
+    
     def __get_float(self, text):
         if text.startswith('$'): text = text[1:]
         if text.startswith('('): text = '-'+text[1:-1]
@@ -428,33 +429,32 @@ class Etrade():
             return None
 
     def __set_accounts_info(self):
-        account_number = None
-        account_type = None
-        start_date = None
-        end_date = None
-        
-        page_num = self.__name_pages['Account Number']['pages'][0]
-        for block in self.statement.get_page_blocks(page_num):
-            if block[0].startswith('Account Number:'):
-                account_number = block[0].split(':')[-1].strip()
-                account_type = block[2].split(':')[-1].strip()
-                date = block[1].split(':')[-1].strip()
-                date = date.split('-')
-                start_date = datetime.strptime(date[0].strip(), '%B %d, %Y')
-                end_date = datetime.strptime(date[1].strip(), '%B %d, %Y')
-        self.accounts[account_number] = {
-            'type': account_type,
-            'start_date': start_date,
-            'end_date': end_date,
-            'holdings': {},
-        }
+        for account_number, account_data in self.__name_pages['accounts'].items():
+            self.accounts[account_number] = {'holdings': {}}
+            page_num = account_data['Account Number:']['pages'][0]
+            for block in self.statement.get_page_blocks(page_num):
+                if block[0].startswith('Account Number:'):
+                    # get account data
+                    self.accounts[account_number]['type'] = block[2].split(':')[-1].strip()
+
+                    account_period = block[1].split(':')[-1].strip()
+                    dates = account_period.split('-')
+                    self.accounts[account_number]['start_date'] = datetime.strptime(dates[0].strip(), '%B %d, %Y')
+                    self.accounts[account_number]['end_date'] = datetime.strptime(dates[1].strip(), '%B %d, %Y')
+                    
+                    break
 
     def __set_name_pages(self):
+        # search structure:
+        # key words under children are the start key words of blocks of lines
+        # the 'stop' keyword is the end key word of blocks of those lines
+        # the 'lines' feyword has all the lines of that block
         self.__name_pages = {
-            'Account Number': {
+            'accounts': {},
+            'Account Number:': {
                 'pages': [],
                 'children': {
-                    # holdings
+                    # holdings: these blocks contain the security holdings of the account
                     'CASH & CASH EQUIVALENTS  (': {
                         'stop': ['TOTAL CASH & CASH EQUIVALENTS'],
                         'lines': [],
@@ -483,8 +483,8 @@ class Etrade():
                         'stop': ['TOTAL CD'],
                         'lines': [],
                     },
-
-                    # activities
+                    
+                    # activities: these blocks contain the security holdings of the account
                     'SECURITIES PURCHASED OR SOLD': {
                         'stop': ['TOTAL SECURITIES ACTIVITY'],
                         'lines': [],
@@ -500,7 +500,7 @@ class Etrade():
                         'lines': [],
                     },
                     'CONTRIBUTIONS & DISTRIBUTIONS ACTIVITY': {
-                        'stop': ['TOTAL CONTRIBUTIONS & DISTRIBUTIONS'],
+                        'stop': ['TOTAL CONTRIBUTIONS & DISTRIBUTIONS', 'RETIREMENT SWEEP DEPOSIT ACCOUNT PROGRAM (RSDA) ACTIVITY'],
                         'lines': [],
                     },
                     'WITHDRAWALS & DEPOSITS': {
@@ -511,61 +511,91 @@ class Etrade():
                         'stop': [
                             'TOTAL OTHER ACTIVITY',
                             'EXTENDED INSURANCE SWEEP DEPOSIT ACCOUNT (ESDA) ACTIVITY',
-                            'RETIREMENT SWEEP DEPOSIT ACCOUNT PROGRAM (RSDA) ACTIVITY'
-                            ],
+                            'RETIREMENT SWEEP DEPOSIT ACCOUNT PROGRAM (RSDA) ACTIVITY',
+                        ],
                         'lines': [],
                     },
                 },
             },
         }
+
+        # search for pages that contain the 'Account Number:' to retrieve account number and their pages
         for page_num, blocks in self.statement.get_blocks().items():
             for block in blocks:
                 # print('%s: %s' % (block[0], page_num))
-                for page_name in self.__name_pages.keys():
-                    if block[0].startswith(page_name):
-                        # print('%s: %s' % (block[0], page_num))
-                        self.__name_pages[page_name]['pages'].append(page_num)
-                        break
-        for page_name, page_data in self.__name_pages.items():
-            if len(page_data['pages']) > 0:
-                if len(page_data['children']) > 0:
-                    lines = []
-                    for page_num in page_data['pages']:
-                        blocks = self.statement.get_page_blocks(page_num)
-                        for block in blocks:
-                            lines += block
-                    self.__recurse_lines(page_data['children'], lines)
+                if block[0].startswith('Account Number:'):
+                    account_number = block[0].split(':')[-1].strip()
+                    if account_number not in self.__name_pages['accounts']:
+                        self.__name_pages['accounts'][account_number] = {}
+                        self.__name_pages['accounts'][account_number]['Account Number:'] = copy.deepcopy(self.__name_pages['Account Number:'])
+                    self.__name_pages['accounts'][account_number]['Account Number:']['pages'].append(page_num)
+                    break
+
+        for account_number, account_data in self.__name_pages['accounts'].items():
+            for pages_name, page_data in account_data.items():
+                if len(page_data['pages']) > 0:
+                    if len(page_data['children']) > 0:
+                        lines = []
+                        for page_num in page_data['pages']:
+                            blocks = self.statement.get_page_blocks(page_num)
+                            for block in blocks:
+                                # for line in block:
+                                #     if 'Continued' in line:
+                                #         print(line)
+                                #         print('\t%s' % self.statement.pdf_file)
+                                lines += block
+                        self.__recurse_lines(page_data['children'], lines)
 
     def __recurse_lines(self, name_pages, lines):
         current_name = None
+        current_lines = []
         for line in lines:
             
+            # check if current lines block should be stopped
             if current_name != None:
                 if 'stop' in name_pages[current_name]:
-                    # if line == name_pages[current_name]['stop']:
-                    #     current_name = None
-                    #     continue
+                    # go through stop keywords and check if line starts with it
                     for stop_line in name_pages[current_name]['stop']:
                         if line.startswith(stop_line):
+                            # print('stop: %s with: %s' % (current_name, stop_line))
+                            name_pages[current_name]['lines'] = current_lines
                             current_name = None
+                            current_lines = []
                             break
                     if current_name == None: continue
             
-            # if line in name_pages.keys():
-            #     current_name = line
-            #     continue
-            key_found = False
+            found_start = False
+            # check if current lines block should start
+            # go through start keywords and check if line starts with it
             for key in name_pages.keys():
-                if line.startswith(key):
-                    # print(line)
+                if line.startswith(key) and key != current_name:
+                    if current_name != None:
+                        # print('%s: %s' % (self.name, self.statement.pdf_file))
+                        # print('not stopped: %s before start of: %s' % (current_name, key))
+                        name_pages[current_name]['lines'] = current_lines
+                    # print('start: new: %s old: %s' % (key, current_name))
                     current_name = key
-                    key_found = True
+                    current_lines = []
+                    found_start = True
                     break
-            if key_found: continue
+            # since this line is a start key, skip it
+            if found_start: continue
 
+            # collect lines for current keyword block
             if current_name != None:
-                name_pages[current_name]['lines'].append(line)
+                current_lines.append(line)
 
+        if current_name != None:
+            name_pages[current_name]['lines'] = current_lines
+            # print('%s: %s' % (self.name, self.statement.pdf_file))
+            # print('last current name not stopped: %s' % current_name)
+            # raise Exception('last current name not stopped: %s' % current_name)
+            # print('%s: %s' % (self.name, self.statement.pdf_file))
+            # print(current_name)
+            # # for line in current_lines:
+            # #     print('\t%s' % line)
+
+        # recurse through children each keyword's children with found lines
         for name, name_data in name_pages.items():
             if 'children' in name_data:
                 self.__recurse_lines(name_data['children'], name_data['lines'])
