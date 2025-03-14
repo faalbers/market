@@ -13,7 +13,7 @@ class Etrade():
         # if self.statement.pdf_file != 'database/statements_ms\\Etrade 2014-07-08.pdf': return
         # if self.statement.pdf_file != 'database/statements_ms\\RO_2022_11.pdf': return
 
-        # return
+        return
 
         print('')
         print('%s: %s' % (self.name, self.statement.pdf_file))
@@ -42,7 +42,7 @@ class Etrade():
             for activity in activities:
                 lines = children[activity]['lines']
                 if len(lines) > 0:
-                    print('\t%s' % activity)
+                    # print('\t%s' % activity)
                     self.__get_transactions(lines, account_number)
 
     def __get_transactions(self, lines, account_number):
@@ -67,7 +67,7 @@ class Etrade():
                         # we got to the next Transaction Date
                         # store the last one and create a new one
                         self.__parse_transaction(current_transaction)
-                        # self.__add_transaction(current_transaction)
+                        self.__add_transaction(current_transaction, account_number)
                         current_transaction = {'transaction_date': date, 'lines': []}
                 else:
                     # this is the first Transaction Date, create a new one
@@ -86,7 +86,27 @@ class Etrade():
         # make sure the last transaction is added if needed
         if 'transaction_date' in current_transaction:
             self.__parse_transaction(current_transaction)
-            # self.__add_transaction(current_transaction)
+            self.__add_transaction(current_transaction, account_number)
+
+    def __add_transaction(self, transaction, account_number):
+        account = self.accounts[account_number]
+        if not 'type' in transaction: return
+        security = transaction.pop('security')
+        symbol = transaction.pop('symbol')
+        cusip = transaction.pop('cusip')
+
+        # skip securities
+        skip_securities = [
+            'EXTENDED INSURANCE SWEEP DEPOSIT ACCOUNT',
+            'EXTENDED INSURANCE SWEEP DEPOSIT ACCOUNT INTEREST',
+        ]
+        if security in skip_securities: return
+        
+        if security in account['holdings']:
+            account['holdings'][security]['transactions'].append(transaction)
+        else:
+            account['holdings'][security] = {'type': None, 'symbol': symbol, 'cusip': cusip, 'date': account['end_date'], 'transactions': []}
+            account['holdings'][security]['transactions'].append(transaction)
 
     def __parse_transaction(self, transaction):
         lines = transaction.pop('lines')
@@ -155,7 +175,7 @@ class Etrade():
             pass
             # print(transaction['type'])
         
-        pp(transaction)
+        # pp(transaction)
 
     def __fix_security_name(self, security, symbol, cusip):
         account = self.accounts[list(self.accounts.keys())[0]]
@@ -430,7 +450,7 @@ class Etrade():
 
     def __set_accounts_info(self):
         for account_number, account_data in self.__name_pages['accounts'].items():
-            self.accounts[account_number] = {'holdings': {}}
+            self.accounts[account_number] = {'statement': self.statement.pdf_file, 'holdings': {}}
             page_num = account_data['Account Number:']['pages'][0]
             for block in self.statement.get_page_blocks(page_num):
                 if block[0].startswith('Account Number:'):

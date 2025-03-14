@@ -10,30 +10,209 @@ class Fidelity():
         self.statement = statement
         self.accounts = {}
 
-        # if self.statement.pdf_file != 'database/statements_fi\\UNIQUE_2018_08.pdf': return
+        # if self.statement.pdf_file != 'database/statements_fi\\UNIQUE_2023_08.pdf': return
 
         return
 
-        # print('')
-        # print('%s: %s' % (self.name, self.statement.pdf_file))
+        print('')
+        print('%s: %s' % (self.name, self.statement.pdf_file))
 
         self.__set_name_pages()
         self.__set_accounts_info()
         self.__set_holdings()
+        self.__set_transactions()
 
         # pp(self.__name_pages['accounts'])
-        # pp(self.accounts)
+        pp(self.accounts)
+
+    def __set_transactions(self):
+        for account_number, account_data in self.__name_pages['accounts'].items():
+            # print(account_number)
+            
+            children = account_data['Account #']['children']
+
+            activities = [
+                'Securities Bought & Sold',
+                'Core Fund Activity',
+                'Dividends, Interest & Other Income',
+                'Securities Transferred In',
+                # 'Exchanges Out',
+                # 'Exchanges In',
+                'Transfers Between Fidelity Accounts',
+            ]
+
+            for activity in activities:
+                lines = children[activity]['lines']
+                if len(lines) > 0:
+                    # print('%s: %s' % (self.name, self.statement.pdf_file))
+                    # print('\t%s' % activity)
+                    self.__get_transactions(lines, account_number, activity)
+
+    def __get_transactions(self, lines, account_number, activity):
+        account = self.accounts[account_number]
+        current_transaction = {}
+        for line_index in range(len(lines)):
+            line = lines[line_index]
+            line_digits = line.replace('/', '')
+            if line_digits.isdigit() and line != line_digits and len(line_digits) <= 4:
+                # create a datetime object from the date line
+                date_elements = line.split('/')
+                date = datetime(month=int(date_elements[0]), day=int(date_elements[1]), year=account['end_date'].year)
+
+                if 'transaction_date' in current_transaction:
+                    self.__parse_transaction(current_transaction, activity)
+                    # pp(current_transaction)
+                    self.__add_transaction(current_transaction, account_number)
+                
+                current_transaction = {'transaction_date': date, 'lines': []}
+
+            elif 'transaction_date' in current_transaction:
+                current_transaction['lines'].append(line)
+        
+        # make sure the last transaction is added if needed
+        if 'transaction_date' in current_transaction:
+            self.__parse_transaction(current_transaction, activity)
+            # pp(current_transaction)
+            self.__add_transaction(current_transaction, account_number)
+
+    def __add_transaction(self, transaction, account_number):
+        account = self.accounts[account_number]
+        security = transaction.pop('security')
+        symbol = transaction.pop('symbol')
+        cusip = transaction.pop('cusip')
+
+        if security in account['holdings']:
+            if cusip != account['holdings'][security]['cusip']:
+                account['holdings'][security]['cusip'] = cusip
+            account['holdings'][security]['transactions'].append(transaction)
+        else:
+            account['holdings'][security] = {'type': None, 'symbol': symbol, 'cusip': cusip, 'date': account['end_date'], 'transactions': []}
+            account['holdings'][security]['transactions'].append(transaction)
+    
+    def __parse_transaction(self, transaction, activity):   
+        lines = transaction.pop('lines')
+        
+        transaction_types = [
+            'You Bought', 'You Sold', # 'Securities Bought & Sold'
+            'You Bought', 'You Sold', 'Reinvestment', 'Transferred', # 'Core Fund Activity'
+            'Dividend Received', 'Interest Earned', 'Reinvestment', 'Long-Term Cap Gain', 'Short-Term Cap Gain', # 'Dividends, Interest & Other Income'
+            'Transfer Of Assets', # 'Securities Transferred In'
+            # 'Transferred From', 'Transferred To', # 'Exchanges In' 'Exchanges Out'
+            'Transferred From', 'Transferred To', # 'Transfers Between Fidelity Accounts'
+        ]
+        transaction_types = set(transaction_types)
+
+        if activity == 'Securities Bought & Sold':
+            # print('\n\t\tlines:')
+            # for line in lines:
+            #     print('\t\t\t%s' % line)
+            for line_idx in range(len(lines)):
+                line = lines[line_idx]
+                if line in transaction_types:
+                    transaction['type'] = line
+                    transaction['security'] = ' '.join(lines[:line_idx-1]).strip()
+                    # HACK
+                    for split_name in ['CONF:', '0.00000% ', 'UNSOLICITED ', 'CONTRIBUTION ', '+']:
+                        if split_name in transaction['security']:
+                            splits = transaction['security'].split(split_name)
+                            transaction['security'] = splits[0].strip()
+                            transaction['comments'] = split_name + splits[1].strip()
+                    symbol, cusip = self.__get_symbol_cusip(lines[line_idx-1])
+                    if transaction['security'] == 'UNITED STATES TREAS BILLS ZERO CPN':
+                        transaction['security'] += ' %s' % cusip
+                    transaction['symbol'] = symbol
+                    transaction['cusip'] = cusip
+                    transaction['quantity'] = self.__get_float(lines[line_idx+1])
+                    transaction['price'] = self.__get_float(lines[line_idx+2])
+                    return
+                
+        if activity == 'Core Fund Activity':
+            for line_idx in range(len(lines)):
+                line = lines[line_idx]
+                if line in transaction_types:
+                    transaction['type'] = line
+                    transaction['security'] = lines[line_idx+1]
+                    transaction['symbol'] = None
+                    transaction['cusip'] = None
+                    transaction['comments'] = lines[line_idx+2]
+                    transaction['quantity'] = self.__get_float(lines[line_idx+3])
+                    transaction['price'] = self.__get_float(lines[line_idx+4])
+                    return
+
+
+        if activity == 'Dividends, Interest & Other Income':
+            for line_idx in range(len(lines)):
+                line = lines[line_idx]
+                if line in transaction_types:
+                    transaction['type'] = line
+                    transaction['security'] = ' '.join(lines[:line_idx-1]).strip()
+                    symbol, cusip = self.__get_symbol_cusip(lines[line_idx-1])
+                    transaction['symbol'] = symbol
+                    transaction['cusip'] = cusip
+                    if transaction['type'] == 'Reinvestment':
+                        if 'AS OF' in transaction['security']:
+                            transaction['security'] = transaction['security'].split('AS OF')[0].strip()
+                        transaction['quantity'] = self.__get_float(lines[line_idx+1])
+                        transaction['price'] = self.__get_float(lines[line_idx+2])
+                    else:
+                        transaction['amount'] = self.__get_float(lines[line_idx+3])
+                    return
+
+        if activity == 'Securities Transferred In':
+            for line_idx in range(len(lines)):
+                line = lines[line_idx]
+                if line in transaction_types:
+                    transaction['type'] = line
+                    transaction['security'] = ' '.join(lines[:line_idx-1]).strip()
+                    if 'ACAT' in transaction['security']:
+                        splits = transaction['security'].split('ACAT')
+                        transaction['security'] = splits[0].strip()
+                        transaction['comments'] = 'ACAT ' + splits[1].strip()
+                    symbol, cusip = self.__get_symbol_cusip(lines[line_idx-1])
+                    transaction['symbol'] = symbol
+                    transaction['cusip'] = cusip
+                    transaction['quantity'] = self.__get_float(lines[line_idx+1])
+                    transaction['price'] = self.__get_float(lines[line_idx+2])
+                    return
+
+        # if activity in ['Exchanges Out', 'Exchanges In']:
+        #     for line_idx in range(len(lines)):
+        #         line = lines[line_idx]
+        #         if line in transaction_types:
+        #             transaction['type'] = line
+        #             transaction['security'] = ' '.join(lines[:line_idx]).strip()
+        #             transaction['symbol'] = None
+        #             transaction['cusip'] = None
+        #             transaction['amount'] = self.__get_float(lines[line_idx+3])
+        #             print(transaction['security'])
+        #             return
+
+        if activity == 'Transfers Between Fidelity Accounts':
+            for line_idx in range(len(lines)):
+                line = lines[line_idx]
+                if line in transaction_types:
+                    transaction['type'] = line
+                    transaction['security'] = lines[0].strip()
+                    transaction['comments'] = ' '.join(lines[1:line_idx-1]).strip()
+                    symbol, cusip = self.__get_symbol_cusip(lines[line_idx-1])
+                    if transaction['security'] == 'UNITED STATES TREAS BILLS ZERO CPN':
+                        transaction['security'] += ' %s' % cusip
+                    transaction['symbol'] = symbol
+                    transaction['cusip'] = cusip
+                    transaction['quantity'] = self.__get_float(lines[line_idx+1])
+                    transaction['price'] = self.__get_float(lines[line_idx+2])
+                    return
 
     def __set_holdings(self):
         for account_number, account_data in self.__name_pages['accounts'].items():
             # print('%s' % account_number)
             children = account_data['Account #']['children']
 
-            lines = children['Holdings']['lines']
+            lines = children['NH PORTFOLIO 2024 (FIDELITY FUNDS)']['lines']
             if len(lines) > 0:
-                # print('\tHoldings')
-                self.__add_holdings_other(lines, account_number, 'Holdings')
-
+                # print('\tNH PORTFOLIO 2024 (FIDELITY FUNDS)')
+                self.__add_holdings_nh(lines, account_number, 'NH PORTFOLIO 2024 (FIDELITY FUNDS)')
+            
             lines = children['Core Account']['lines']
             if len(lines) > 0:
                 # print('\tCore Account')
@@ -54,22 +233,21 @@ class Fidelity():
                 # print('\tUS Treasury/Agency Securities')
                 self.__add_bill(lines, account_number, 'US Treasury/Agency Securities')
 
-    def __add_holdings_other(self, lines, account_number, page_name):
-        # add other holdings data to account holdings
+    def __add_holdings_nh(self, lines, account_number, page_name):
+        if lines[0] != '100%': return
         account = self.accounts[account_number]
-        lines = self.__trim_lines(lines, page_name)
 
-        for line_idx in range(len(lines)):
-            line = lines[line_idx]
-            if line.isupper() and '(' in line and ')' in line:
-                security = line.strip()
-                values = lines[line_idx+1:]
-                quantity = self.__get_float(values[2])
-                price = self.__get_float(values[3])
-                account['holdings'][security] = {
-                    'type': 'college fund', 'symbol': None, 'cusip': None, 'quantity': quantity, 'price': price, 'date': account['end_date'],
-                    'transactions': []}
-
+        if lines[2].startswith('$'):
+            quantity = self.__get_float(lines[1])
+            price = self.__get_float(lines[2])
+        else:
+            quantity = self.__get_float(lines[2])
+            price = self.__get_float(lines[3])
+        
+        account['holdings']['NH PORTFOLIO 2024 (FIDELITY FUNDS)'] = {
+            'type': 'college fund', 'symbol': None, 'cusip': None, 'quantity': quantity, 'price': price, 'date': account['end_date'],
+            'transactions': []}
+        
     def __add_core(self, lines, account_number, page_name):
         # add core data to account holdings
         account = self.accounts[account_number]
@@ -197,7 +375,7 @@ class Fidelity():
 
     def __set_accounts_info(self):
         for account_number, account_data in self.__name_pages['accounts'].items():
-            self.accounts[account_number] = {'holdings': {}}
+            self.accounts[account_number] = {'statement': self.statement.pdf_file, 'holdings': {}}
             page_num = account_data['Account #']['pages'][0]
             for block in self.statement.get_page_blocks(page_num):
                 if block[0].startswith('INVESTMENT REPORT'):
@@ -218,7 +396,7 @@ class Fidelity():
                 'pages': [],
                 'children': {
                     # Holdings
-                    'Holdings': {
+                    'NH PORTFOLIO 2024 (FIDELITY FUNDS)': {
                         'stop': 'Total Market Value',
                         'lines': [],
                     },
@@ -244,6 +422,30 @@ class Fidelity():
                         'stop': 'Net Securities Bought & Sold',
                         'lines': [],
                     },
+                    'Securities Transferred In': {
+                        'stop': 'Total Securities Transferred In',
+                        'lines': [],
+                    },
+                    'Dividends, Interest & Other Income': {
+                        'stop': 'Total Dividends, Interest & Other Income',
+                        'lines': [],
+                    },
+                    'Core Fund Activity': {
+                        'stop': 'Total Core Fund Activity',
+                        'lines': [],
+                    },
+                    'Exchanges In': {
+                        'stop': 'Total Exchanges In',
+                        'lines': [],
+                    },
+                    'Exchanges Out': {
+                        'stop': 'Total Exchanges Out',
+                        'lines': [],
+                    },
+                    'Transfers Between Fidelity Accounts': {
+                        'stop': 'Total Transfers Between Fidelity Accounts',
+                        'lines': [],
+                    },
                 },
             },
         }
@@ -261,6 +463,8 @@ class Fidelity():
                     break
 
         for account_number, account_data in self.__name_pages['accounts'].items():
+            # print()
+            # print(account_number)
             for pages_name, page_data in account_data.items():
                 if len(page_data['pages']) > 0:
                     if len(page_data['children']) > 0:
@@ -279,7 +483,12 @@ class Fidelity():
     def __recurse_lines(self, name_pages, lines):
         current_name = None
         current_lines = []
+        current_activity = 'None'
         for line in lines:
+            if line in ['Account Summary', 'Holdings', 'Activity', 'Additional Information and Endnotes']:
+                current_activity = line
+                # print('activity: %s' % current_activity)
+                continue
             if current_name != None:
                 if 'stop' in name_pages[current_name]:
                     if line.startswith(name_pages[current_name]['stop']):
@@ -289,25 +498,30 @@ class Fidelity():
                         current_lines = []
                         continue
             
-            if line in name_pages:
-                # HACK
-                if current_name != None and line in ['Holdings']: continue
-                # print('start: new: %s old: %s' % (line, current_name))
-                current_name = line
-                current_lines = []
-                continue
+            if current_activity in ['Holdings', 'Activity']:
+                if line in name_pages:
+                    # HACK for NH
+                    if not (line == 'NH PORTFOLIO 2024 (FIDELITY FUNDS)' and current_activity != 'Holdings'):
+                        if current_name != None:
+                            # print('%s: %s' % (self.name, self.statement.pdf_file))
+                            # print('not stopped: %s before start of: %s' % (current_name, line))
+                            name_pages[current_name]['lines'] = current_lines
+                        # print('\nstart: new: %s old: %s' % (line, current_name))
+                        current_name = line
+                        current_lines = []
+                        continue
 
             if current_name != None:
+                # if current_name == 'Securities Bought & Sold':
+                #     print('\t%s' % line)
                 current_lines.append(line)
         
         # if 'Holding' is still open that's OK. others raise an exception
         if current_name != None:
-            if not current_name in ['Holdings']:
-                raise Exception('last current name not stopped: %s' % current_name)
-                # print('%s: %s' % (self.name, self.statement.pdf_file))
-                # print(current_name)
-                # for line in current_lines:
-                #     print('\t%s' % line)
+            name_pages[current_name]['lines'] = current_lines
+            # print('%s: %s' % (self.name, self.statement.pdf_file))
+            # print('last current name not stopped: %s' % current_name)
+            # raise Exception('last current name not stopped: %s' % current_name)
 
         for name, name_data in name_pages.items():
             if 'children' in name_data:

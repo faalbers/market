@@ -12,7 +12,7 @@ class Merrill_Lynch():
 
         # if self.statement.pdf_file != 'database/statements_ml\\7WA 15527-2013-10-12.pdf': return
 
-        # return
+        return
 
         print('')
         print('%s: %s' % (self.name, self.statement.pdf_file))
@@ -57,7 +57,7 @@ class Merrill_Lynch():
     def __set_accounts_info(self):
         date_string = None
         for account_number, account_data in self.__name_pages['accounts'].items():
-            self.accounts[account_number] = {'type': 'INDIVIDUAL INVESTOR ACCOUNT', 'holdings': {}}
+            self.accounts[account_number] = {'type': 'INDIVIDUAL INVESTOR ACCOUNT', 'statement': self.statement.pdf_file, 'holdings': {}}
             if date_string == None:
                 page_num = account_data['Account']['pages'][0]
                 for block in self.statement.get_page_blocks(page_num):

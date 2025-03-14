@@ -287,7 +287,7 @@ class Morgan_Stanley():
         for account_number, account_data in self.__name_pages['accounts'].items():
             
             if 'Account Detail' in account_data:
-                self.accounts[account_number] = {'holdings': {}}
+                self.accounts[account_number] = {'statement': self.statement.pdf_file, 'holdings': {}}
                 blocks = self.statement.get_page_blocks(account_data['Account Detail']['pages'][0])
                 self.accounts[account_number]['type'] = blocks[2][0].strip()
                 period = blocks[1][0].split('For the Period ')[-1].strip()
@@ -297,7 +297,7 @@ class Morgan_Stanley():
                 if 'Holdings' in account_data: page_name = 'Holdings'
                 elif 'Activity' in account_data: page_name = 'Activity'
                 if page_name != None:
-                    self.accounts[account_number] = {'holdings': {}}
+                    self.accounts[account_number] = {'statement': self.statement.pdf_file, 'holdings': {}}
                     blocks = self.statement.get_page_blocks(account_data[page_name]['pages'][0])
                     for block_idx in range(len(blocks)):
                         block = blocks[block_idx]

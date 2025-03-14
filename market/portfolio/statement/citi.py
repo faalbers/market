@@ -14,15 +14,98 @@ class Citi():
 
         return
 
-        # print('')
-        # print('%s: %s' % (self.name, self.statement.pdf_file))
+        print('')
+        print('%s: %s' % (self.name, self.statement.pdf_file))
 
         self.__set_name_pages()
         self.__set_accounts_info()
         self.__set_holdings()
+        self.__set_transactions()
 
         # pp(self.__name_pages['accounts'])
         # pp(self.accounts)
+
+    def __set_transactions(self):
+        for account_number, account_data in self.__name_pages['accounts'].items():
+            # print(account_number)
+            
+            children = account_data['Account number']['children']
+            
+            activities = [
+                'Other security activity',
+                'Qualified dividends',
+            ]
+
+            for activity in activities:
+                lines = children[activity]['lines']
+                if len(lines) > 0:
+                    # print('\t%s' % activity)
+                    self.__get_transactions(lines, account_number, activity)
+
+    def __get_transactions(self, lines, account_number, activity):
+        account = self.accounts[account_number]
+        current_transaction = {}
+        for line_index in range(len(lines)):
+            line = lines[line_index]
+            line_digits = line.replace('/', '')
+            if line_digits.isdigit() and line != line_digits and len(line_digits) == 6:
+                # create a datetime object from the date line
+                date_elements = line.split('/')
+                date = datetime.strptime(line, '%m/%d/%y')
+
+                if 'transaction_date' in current_transaction:
+                    self.__parse_transaction(current_transaction, activity)
+                    self.__add_transaction(current_transaction, account_number)
+                
+                current_transaction = {'transaction_date': date, 'lines': []}
+
+            elif 'transaction_date' in current_transaction:
+                current_transaction['lines'].append(line)
+        
+        # make sure the last transaction is added if needed
+        if 'transaction_date' in current_transaction:
+            self.__parse_transaction(current_transaction, activity)
+            self.__add_transaction(current_transaction, account_number)
+
+    def __add_transaction(self, transaction, account_number):
+        account = self.accounts[account_number]
+        security = transaction.pop('security')
+
+        if security in account['holdings']:
+            account['holdings'][security]['transactions'].append(transaction)
+        else:
+            # HACK just for when it's not in holdings anymore
+            if security == 'WALT DISNEY CO':
+                type = 'stock'
+                symbol = 'DIS'
+                cusip = None
+            account['holdings'][security] = {'type': type, 'symbol': symbol, 'cusip': cusip, 'date': account['end_date'], 'transactions': []}
+            account['holdings'][security]['transactions'].append(transaction)
+
+    def __parse_transaction(self, transaction, activity):
+        lines = transaction.pop('lines')
+        if activity == 'Other security activity':
+            transaction['type'] = lines[0].strip()
+            transaction['security'] = lines[3].strip()
+            transaction['comments'] = lines[4].strip()
+            transaction['quantity'] = self.__get_float(lines[1].strip())
+            transaction['amount'] = self.__get_float(lines[2].strip())
+        elif activity == 'Qualified dividends':
+            transaction['type'] = 'Qualified dividend'
+            transaction['security'] = lines[2].strip()
+            transaction['comments'] = lines[3].strip()
+            transaction['amount'] = self.__get_float(lines[0].strip())
+
+        # pp(transaction)
+
+    def __get_float(self, text):
+        if text.startswith('$'): text = text[1:]
+        if text.startswith('('): text = '-'+text[1:-1]
+        text = text.replace(',', '')
+        try:
+            return float(text)
+        except:
+            return None
 
     def __set_holdings(self):
         for account_number, account_data in self.__name_pages['accounts'].items():
@@ -58,7 +141,7 @@ class Citi():
     def __set_accounts_info(self):
         date_string = None
         for account_number, account_data in self.__name_pages['accounts'].items():
-            self.accounts[account_number] = {'type': 'INDIVIDUAL INVESTOR ACCOUNT', 'holdings': {}}
+            self.accounts[account_number] = {'type': 'INDIVIDUAL INVESTOR ACCOUNT', 'statement': self.statement.pdf_file, 'holdings': {}}
             if date_string == None:
                 page_num = account_data['Account number']['pages'][0]
                 for block in self.statement.get_page_blocks(page_num):
@@ -85,10 +168,22 @@ class Citi():
             'Account number': {
                 'pages': [],
                 'children': {
+                    # Holdings
                     'Common stocks & options': {
                         'stop': 'Total common stocks and options',
                         'lines': [],
                     },
+
+                    # Activity
+                    'Other security activity': {
+                        'stop': 'Net value of securities deposited/(withdrawn) + capital contributions',
+                        'lines': [],
+                    },
+                    'Qualified dividends': {
+                        'stop': 'Total qualified dividends earned',
+                        'lines': [],
+                    },
+
                 },
             },
         }
@@ -112,6 +207,10 @@ class Citi():
                         for page_num in page_data['pages']:
                             blocks = self.statement.get_page_blocks(page_num)
                             for block in blocks:
+                                # for line in block:
+                                #     if line in ['TRANSACTION DETAILS', 'EARNINGS DETAILS']:
+                                #         print(line)
+                                #         print('\t%s' % self.statement.pdf_file)
                                 lines += block
                         self.__recurse_lines(page_data['children'], lines)
 
