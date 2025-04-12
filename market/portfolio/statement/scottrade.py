@@ -10,9 +10,12 @@ class Scottrade():
         self.statement = statement
         self.accounts = {}
 
-        # if self.statement.pdf_file != 'database/statements_st\\STRO_2013-12.pdf': return
+        # if self.statement.pdf_file != 'database/statements_st\\STRO_2010-02.pdf': return
+        # if self.statement.pdf_file != 'database/statements_st\\ST-Roth_06-09.pdf': return
+        # if self.statement.pdf_file != 'database/statements_st\\ST-Roth_06-10.pdf': return
+        # if self.statement.pdf_file != 'database/statements_st\\STRO_2010-02.pdf': return
         
-        return
+        # return
 
         # print('')
         # print('%s: %s' % (self.name, self.statement.pdf_file))
@@ -23,7 +26,8 @@ class Scottrade():
         self.__set_transactions()
 
         # pp(self.__name_pages['accounts'])
-        # pp(self.accounts)
+        # if self.statement.pdf_file == 'database/statements_st\\STJ_2009_11.pdf':
+        #     pp(self.accounts)
 
     def __set_transactions(self):
         for account_number, account_data in self.__name_pages['accounts'].items():
@@ -34,7 +38,7 @@ class Scottrade():
             activities = [
                 'CASH ACCOUNT ACTIVITY',
                 'MARGIN ACCOUNT ACTIVITY',
-                'TRADES PENDING SETTLEMENT',
+                # 'TRADES PENDING SETTLEMENT',
             ]
 
             for activity in activities:
@@ -44,6 +48,8 @@ class Scottrade():
                     self.__get_transactions(lines, account_number, activity)
 
     def __get_transactions(self, lines, account_number, activity):
+        # for line in lines:
+        #     print('\t\t%s' % line)
         account = self.accounts[account_number]
 
         if lines[0] == 'Type': version = 3
@@ -55,17 +61,36 @@ class Scottrade():
         current_transaction = {}
         for line_index in range(len(lines)):
             line = lines[line_index]
-            line_digits = line.replace('/', '')
-            if line_digits.isdigit() and line != line_digits and len(line_digits) == 6:
+            
+            # handle double lines in earlier versions
+            line_splits = line.split(' ')
+            double_line = False
+            if len(line_splits) > 1:
+                line_0 = line_splits[0].strip()
+                line_1 = ' '.join(line_splits[1:]).strip()
+                line_digits = line_0.replace('/', '')
+                is_date_line = line_digits.isdigit() and line_0 != line_digits and len(line_digits) == 6
+                double_line = True
+            else:
+                line_digits = line.replace('/', '')
+                is_date_line = line_digits.isdigit() and line != line_digits and len(line_digits) == 6
+            
+            if is_date_line:
+                # print(line)
                 # create a datetime object from the date line
-                date_elements = line.split('/')
-                date = datetime.strptime(line, '%m/%d/%y')
+                if double_line:
+                    date = datetime.strptime(line_0, '%m/%d/%y')
+                else:
+                    date = datetime.strptime(line, '%m/%d/%y')
 
                 if 'transaction_date' in current_transaction:
                     self.__parse_transaction(current_transaction, account_number, version, activity)
                     self.__add_transaction(current_transaction, account_number)
                 
-                current_transaction = {'transaction_date': date, 'lines': []}
+                if double_line:
+                    current_transaction = {'transaction_date': date, 'lines': [line_1]}
+                else:
+                    current_transaction = {'transaction_date': date, 'lines': []}
 
             elif 'transaction_date' in current_transaction:
                 current_transaction['lines'].append(line)
@@ -92,8 +117,13 @@ class Scottrade():
         lines = transaction.pop('lines')
         lines = self.__trim_account_lines(lines, account_number)
 
+        # print(transaction)
+        # for line in lines:
+        #     print('\t\t%s' % line)
+
         # version 1: Date Transaction Quantity Description Price Amount Balance
         # version 2: Date Transaction Symbol/Cusip Quantity TaxLotMethod** Description Price Amount Balance
+        negative_quantity_types = ['SOLD', 'IRA INTRL TRNSFR OUT', 'IRA DISTRIBUTION', 'ACCOUNT TRANSFER', 'DELIVER SECURITIES']
         
         if version == 1:
             quantity_idx = 1
@@ -102,7 +132,11 @@ class Scottrade():
             if transaction_type in ['CREDIT INTEREST', 'ADJUSTMENT']: return
             
             quantity = self.__get_float(lines[quantity_idx].strip())
-            if quantity != None: description_start_idx = quantity_idx+1
+            if quantity != None:
+                description_start_idx = quantity_idx+1
+                if transaction_type in negative_quantity_types: quantity = -quantity
+                elif transaction_type in ['ADJUSTMENT'] and activity == 'CASH ACCOUNT ACTIVITY': quantity = -quantity
+
             else: description_start_idx = quantity_idx
 
             if transaction_type in ['DELIVER SECURITIES', 'RECEIVE SECURITIES']:
@@ -114,10 +148,17 @@ class Scottrade():
             symbol = None
         if version == 2:
             transaction_type = lines[0].strip()
-            symbol = lines[1].replace('#', '').strip()
+            symbol = lines[1]
+            negative_quantity = '#' in symbol
+            # if negative_quantity: print(self.statement.pdf_file)
+            symbol = symbol.replace('#', '').strip()
             if len(symbol) > 5: return
             quantity = self.__get_float(lines[2].strip())
-            if quantity != None: description_start_idx = 3
+            if quantity != None:
+                description_start_idx = 3
+                if negative_quantity: quantity = -quantity
+                elif transaction_type in negative_quantity_types: quantity = -quantity
+                elif transaction_type in ['ADJUSTMENT'] and activity == 'CASH ACCOUNT ACTIVITY': quantity = -quantity
             else: description_start_idx = 2
 
             if transaction_type in [
@@ -127,11 +168,14 @@ class Scottrade():
                 amount = None
             else:
                 description = ' '.join(lines[description_start_idx:-2]).strip()
-                amount = self.__get_float(lines[-1].strip())
+                amount = self.__get_float(lines[-2].strip())
 
         if version == 3:
             transaction_type = lines[0].strip()
             quantity = self.__get_float(lines[1].strip())
+            if quantity != None:
+                if transaction_type in negative_quantity_types: quantity = -quantity
+                elif transaction_type in ['ADJUSTMENT'] and activity == 'CASH ACCOUNT ACTIVITY': quantity = -quantity
             description = lines[2].strip()
             amount = self.__get_float(lines[4].strip())
             symbol = None
@@ -223,9 +267,13 @@ class Scottrade():
                     security_type = 'stock'
                 quantity = self.__get_float(lines[line_idx+2])
                 security = lines[line_idx+3]
-                account['holdings'][security] = {
-                    'type': security_type, 'symbol': symbol, 'cusip': None, 'date': account['end_date'], 'quantity': quantity, 'transactions': []}
-
+                # HACK only one situation
+                if security == 'AIRSPAN NETWORKS INC COM NEW': security = 'AIRSPAN NETWORKS INC COM'
+                if not security in account['holdings']:
+                    account['holdings'][security] = {
+                        'type': security_type, 'symbol': symbol, 'cusip': None, 'date': account['end_date'], 'quantity': quantity, 'transactions': []}
+                else:
+                    account['holdings'][security]['quantity'] += quantity
     def __get_float(self, text):
         text = text.replace('$', '')
         text = text.replace(',', '')

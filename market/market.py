@@ -238,8 +238,8 @@ class Market():
             portfolio.add_report(report)
             report.buildDoc()
     
-    def make_portfolio(self):
-        Portfolio()
+    def get_portfolio(self):
+        return Portfolio()
     
     def get_quicken(self, qif_file):
         return Quicken(qif_file)

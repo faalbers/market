@@ -17,7 +17,7 @@ class YahooF_Chart(YahooF):
         while True:
             try:
                 ticker = yf.Ticker(symbol)
-                chart = ticker.history(period="10y")
+                chart = ticker.history(period="10y",auto_adjust=False)
             except Exception as e:
                 if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                     self.logger.info('YahooF:  Rate Limeit: wait 60 seconds')

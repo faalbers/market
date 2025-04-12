@@ -10,12 +10,12 @@ class Citi():
         self.statement = statement
         self.accounts = {}
 
-        # if self.statement.pdf_file != 'database/statements_ms\\240-26077-13_2012_04-06.pdf': return
+        # if self.statement.pdf_file != 'database/statements_ms\\240-026077-13_2009_01.pdf': return
 
-        return
+        # return
 
-        print('')
-        print('%s: %s' % (self.name, self.statement.pdf_file))
+        # print('')
+        # print('%s: %s' % (self.name, self.statement.pdf_file))
 
         self.__set_name_pages()
         self.__set_accounts_info()
@@ -192,7 +192,7 @@ class Citi():
             for block_idx in range(len(blocks)):
                 block = blocks[block_idx]
                 if block[0].startswith('Account number'):
-                    account_number = block[0].split('Account number')[1].strip()
+                    account_number = block[0].split('Account number')[1].strip().split(' ')[0]
                     if account_number not in self.__name_pages['accounts']:
                         self.__name_pages['accounts'][account_number] = {}
                         self.__name_pages['accounts'][account_number]['Account number'] = copy.deepcopy(self.__name_pages['Account number'])
@@ -228,6 +228,7 @@ class Citi():
                         continue
             
             if line in name_pages:
+                if current_name != None and current_name == line: continue
                 # print('start: new: %s - old: %s' % (line, current_name))
                 current_name = line
                 current_lines = []

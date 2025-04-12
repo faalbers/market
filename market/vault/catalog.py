@@ -86,18 +86,39 @@ class Catalog():
         return data
 
     catalog = {
-        'update_yf': {
+        'update': {
             'info': 'chart test info',
             'sets': {
                 'YahooF_Chart': {
                     'scrapes': {
-                        # YahooF_Chart: {'tables': {'all': {},}},
+                        YahooF_Chart: {'tables': {'all': {},}},
                         YahooF_Info: {'tables': {'all': {},}},
                     },
                 },
             },
         },
         'chart': {
+            'info': 'chart info',
+            'post_procs': [[merge, {}]],
+            'sets': {
+                'YahooF_Chart': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        YahooF_Chart: {
+                            'post_procs': [[reference, {}]],
+                            'tables': {
+                                'table_reference': {
+                                    'column_settings': [
+                                        ['chart', 'chart'],
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        'chart_old': {
             'info': 'chart info',
             'post_procs': [[merge, {}]],
             'sets': {
@@ -140,6 +161,28 @@ class Catalog():
             },
         },
         'profile': {
+            'info': 'get all symbols in our scrapes',
+            'post_procs': [[merge, {}]],
+            'sets': {
+                'YahooF_Info': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        YahooF_Info: {
+                            'post_procs': [[merge, {}]],
+                            'tables': {
+                                'info': {
+                                    'column_settings': [
+                                        ['longName', 'name'],
+                                        ['longBusinessSummary', 'info'],
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        'profile_old': {
             'info': 'get all symbols in our scrapes',
             'post_procs': [[merge, {}]],
             'sets': {

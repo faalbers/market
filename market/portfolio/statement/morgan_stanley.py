@@ -12,11 +12,12 @@ class Morgan_Stanley():
 
         # if self.statement.pdf_file != 'database/statements_ms\\Etrade_TRUST_2024_08.pdf': return
         # if self.statement.pdf_file != 'database/statements_ms\\Etrade_TRUST_2024_12.pdf': return
+        # if self.statement.pdf_file != 'database/statements_ms\\Etrade_TRUST_2024_04.pdf': return
         
-        return
+        # return
 
-        print('')
-        print('%s: %s' % (self.name, self.statement.pdf_file))
+        # print('')
+        # print('%s: %s' % (self.name, self.statement.pdf_file))
 
         self.__set_name_pages()
         self.__set_accounts_info()
@@ -25,6 +26,8 @@ class Morgan_Stanley():
         
         # pp(self.__name_pages['accounts'])
         # pp(self.accounts)
+        # if self.statement.pdf_file == 'database/statements_ms\\Etrade_TRUST_2024_04.pdf':
+        #     pp(self.accounts)
 
     def __set_transactions(self):
         for account_number, account_data in self.__name_pages['accounts'].items():
@@ -53,10 +56,10 @@ class Morgan_Stanley():
                     # print('\tCORPORATE ACTIONS')
                     self.__get_transactions(lines, account_number)
             
-                lines = children['UNSETTLED PURCHASES/SALES ACTIVITY']['lines']
-                if len(lines) > 0:
-                    # print('\tUNSETTLED PURCHASES/SALES ACTIVITY')
-                    self.__get_transactions(lines, account_number)
+                # lines = children['UNSETTLED PURCHASES/SALES ACTIVITY']['lines']
+                # if len(lines) > 0:
+                #     # print('\tUNSETTLED PURCHASES/SALES ACTIVITY')
+                #     self.__get_transactions(lines, account_number)
                 
                 # activities that do nothing on securities, but we keep them around for now
                 # ['MONEY MARKET FUND (MMF) AND BANK DEPOSIT PROGRAM ACTIVITY', 'ELECTRONIC TRANSFERS']
@@ -92,10 +95,10 @@ class Morgan_Stanley():
                         # store the last one and create a new one
                         self.__parse_transaction(current_transaction)
                         self.__add_transaction(current_transaction, account_number)
-                        current_transaction = {'transaction_date': date, 'lines': []}
+                        current_transaction = {'transaction_date': date, 'lines': [], 'statement': self.statement.pdf_file}
                 else:
                     # this is the first Transaction Date, create a new one
-                    current_transaction = {'transaction_date': date, 'lines': []}
+                    current_transaction = {'transaction_date': date, 'lines': [], 'statement': self.statement.pdf_file}
                 
                 # set index since last date line
                 last_index = line_index
@@ -133,6 +136,8 @@ class Morgan_Stanley():
         if transaction['type'] in ['Bought', 'Sold', 'Dividend Reinvestment', 'Redemption']:
             transaction['comments'] = ' '.join(lines[2:-3])
             transaction['quantity'] = self.__get_float(lines[-3])
+            if transaction['type'] in ['Sold', 'Redemption'] and transaction['quantity'] != None:
+                transaction['quantity'] = -transaction['quantity']
             transaction['price'] = self.__get_float(lines[-2])
         elif transaction['type'] in ['Dividend', 'Qualified Dividend', 'LT Cap Gain Distribution', 'ST Cap Gain Distribution', 'Service Fee']:
             transaction['comments'] = ' '.join(lines[2:-1])
@@ -140,6 +145,8 @@ class Morgan_Stanley():
         elif transaction['type'] in ['Transfer into Account', 'Transfer out of Account']:
             transaction['comments'] = ' '.join(lines[2:-2])
             transaction['quantity'] = self.__get_float(lines[-2])
+            if transaction['type'] == 'Transfer out of Account' and transaction['quantity'] != None:
+                transaction['quantity'] = -transaction['quantity']
             transaction['amount'] = self.__get_float(lines[-1])
         elif transaction['type'] in ['Exchange Delivered Out', 'Exchange Received In', 'Stock Spin-Off']:
             transaction['comments'] = ' '.join(lines[2:-1])
@@ -157,6 +164,8 @@ class Morgan_Stanley():
             cusip = transaction['comments'].split(' [')[1].split(']')[0]
             transaction['security'] += ' ' + cusip
             transaction['cusip'] = cusip
+            if 'price' in transaction:
+                transaction['price'] = transaction['price'] / 100.0
 
         # pp(transaction)
 
@@ -230,6 +239,7 @@ class Morgan_Stanley():
                 account['holdings'][security] = {'type': bill_type, 'symbol': symbol, 'cusip': cusip, 'date': account['end_date'], 'transactions': []}
                 holding_lines = lines[line_idx+2:line_idx+len(holding_values)+2]
                 account['holdings'][security]['face_value'] = self.__get_float(holding_lines[holding_values.index('Face Value')])
+                account['holdings'][security]['quantity'] = account['holdings'][security]['face_value']
                 account['holdings'][security]['total_cost'] = self.__get_float(holding_lines[holding_values.index('Orig Total Cost')])
                 if bill_type == 'cd':
                     account['holdings'][security]['rate'] = self.__get_float(details[0].split('  ')[1].strip().rstrip('%'))

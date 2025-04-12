@@ -1,0 +1,225 @@
+**********************
+'name change', 'adjustment'
+- omit these transactions
+
+**********************
+{'Morgan_Stanley'}
+{'Merrill_Lynch_V2', 'Merrill_Lynch'}
+{'Citi'}
+{'Scottrade_V2', 'Scottrade'}
+'exchange delivered out', 'exchange received in', 'journal entry', 'receive', 'deposit', 'reverse split',
+                              type  quantity   price  quantity_total  cost_total  amount  transaction_cost   close
+2024-12-04  exchange delivered out    -154.0     NaN             NaN         NaN     NaN               NaN  105.43
+2024-12-04    exchange received in     616.0     NaN             NaN         NaN     NaN               NaN  105.43
+- only quantity update
+
+**********************
+'account transfer':
+{'Scottrade_V2', 'Scottrade'}:
+                        type  quantity  amount  price  close  quantity_total  cost_total
+2014-08-20  account transfer    -32.11     NaN    NaN  78.35             NaN         NaN
+2014-08-20  account transfer    -80.86     NaN    NaN    NaN             NaN         NaN
+handling:
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to revenue
+
+**********************
+'transfer out of account',
+{'Morgan_Stanley'}:
+                               type  quantity    amount  price  close  quantity_total  cost_total
+2014-08-12  transfer out of account    -429.0  37413.09    NaN  87.21             NaN         NaN
+- if symbol is not 'DIS', add amount to revenue
+
+**********************
+'ira intrl trnsfr out'
+{'Scottrade_V2', 'Scottrade'}
+                            type  quantity  amount  price  close  quantity_total  cost_total
+2014-08-18  ira intrl trnsfr out   -189.48     NaN    NaN  78.18             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to revenue
+
+**********************
+'r&d'
+{'Etrade'}
+                  type  quantity  amount   price   close  quantity_total  cost_total
+2014-08-12         r&d     254.0     NaN     NaN   87.21             NaN         NaN
+2014-08-20         r&d     80.86     NaN     NaN   NaN               NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to cost
+
+**********************
+'transfer of assets'
+{'Fidelity'}
+                          type  quantity  amount  price  close  quantity_total  cost_total
+2018-03-12  transfer of assets     121.2     NaN  74.51  74.51             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to cost
+
+**********************
+'sale',
+{'Merrill_Lynch_V2', 'Merrill_Lynch'}
+                     type  quantity  amount  price  close  quantity_total  cost_total
+2014-02-11           sale   -1500.0     NaN   75.5  77.79             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to revenue
+
+**********************
+'sold',
+{'Morgan_Stanley'}
+{'Etrade'}
+{'Scottrade_V2', 'Scottrade'}
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to revenue
+
+**********************
+'you sold',
+{'Fidelity'}
+                type  quantity  amount  price  close  quantity_total  cost_total
+2020-06-04  you sold   -140.33     NaN  55.11  55.76             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to revenue
+
+**********************
+'bought',
+{'Morgan_Stanley'}
+{'Etrade'}
+              type  quantity  amount  price  close  quantity_total  cost_total
+2024-02-21  bought    171.47     NaN  43.74  43.74             NaN         NaN
+{'Scottrade', 'Scottrade_V2'}
+              type  quantity   amount  price  close  quantity_total  cost_total
+2005-08-16  bought      53.8 -2977.62  55.35  53.84             NaN         NaN
+              type  quantity  amount  price  close  quantity_total  cost_total
+2007-02-07  bought     72.57 -4000.0    NaN  55.12             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to cost
+
+**********************
+'you bought',
+{'Fidelity'}
+                  type  quantity  amount   price   close  quantity_total  cost_total
+2019-08-19  you bought      62.0     NaN  180.11  185.07             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to cost
+
+**********************
+'long-term cap gain', 'long term cap gain', 'long term cap', 'lt cap gain distribution',
+'short-term cap gain', 'st capital gain', 'st cap gain distribution',
+'capital gain', 
+{'Etrade'}
+{'Fidelity'}
+{'Scottrade_V2', 'Scottrade'}
+{'Morgan_Stanley'}
+                    type  quantity   amount  price  close  quantity_total  cost_total
+2021-12-06  capital gain       NaN  2265.08    NaN  47.76             NaN         NaN
+- add amount to capital gain
+
+**********************
+'dividend', 'dividend received', 'qualified dividend', 'taxable dividend'
+{'Morgan_Stanley'}
+{'Fidelity'}
+{'Citi'}
+{'Scottrade_V2', 'Scottrade'}
+                type  quantity  amount  price   close  quantity_total  cost_total
+2023-09-28  dividend       NaN  509.74    NaN  211.61             NaN         NaN
+- add amount to dividend
+
+**********************
+'reinvestment', 'div reinvestment', 'dividend reinvestment', 'reinvest'
+{'Fidelity'}
+{'Morgan_Stanley'}
+                    type  quantity  amount  price  close  quantity_total  cost_total
+2018-11-15  reinvestment      0.12     NaN  63.85  63.85             NaN         NaN
+{'Scottrade_V2', 'Scottrade'}
+{'Etrade'}
+                        type  quantity   amount  price  close  quantity_total  cost_total
+2005-11-17  div reinvestment      0.54   -27.50    NaN  53.84             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to reinvestment
+
+**********************
+'journal',
+{'Etrade'}
+               type  quantity  amount  price  close  quantity_total  cost_total
+2014-08-21  journal      90.0     NaN    NaN  10.04             NaN         NaN
+2014-11-14  journal     -90.0     NaN    NaN   9.91             NaN         NaN
+- if prior transaction is type 'r%d' and 'quantity is the same, omit
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- if amount is negative, add to cost
+- if amount is positive, add to revenue
+
+**********************
+'receive securities',
+{'Scottrade', 'Scottrade_V2'}
+                          type  quantity  amount  price  close  quantity_total  cost_total
+2005-11-25  receive securities       9.0    0.00    NaN  26.16             NaN         NaN
+2012-04-24  receive securities    112.72     NaN    NaN  25.07             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to cost
+
+**********************
+'deliver securities',
+{'Scottrade', 'Scottrade_V2'}
+                          type  quantity  amount  price  close  quantity_total  cost_total
+2005-11-25  deliver securities     -12.0    0.00    NaN  26.16             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to revenue
+
+**********************
+'merger',
+{'Etrade'}
+               type  quantity  amount  price  close  quantity_total  cost_total
+2017-11-01   merger      -6.0   159.0    NaN    NaN             NaN         NaN
+2017-11-01   merger       8.0     NaN    NaN    NaN             NaN         NaN
+- if amount is nan , do nothing, just quantity update
+- if amount is not nan, add to revenue
+
+**********************
+'cash-in-lieu', 'cash in lieu',
+{'Etrade'}
+{'Scottrade', 'Scottrade_V2'}
+                    type  quantity  amount  price  close  quantity_total  cost_total
+2017-11-08  cash-in-lieu       NaN    9.94    NaN    NaN             NaN         NaN
+- add amount to revenue
+
+**********************
+'conversion',
+{'Citi'}
+{'Etrade'}
+                          type  quantity    amount  price  close  quantity_total  cost_total
+2012-07-06          conversion    -429.0  20609.16    NaN  48.04             NaN         NaN
+2023-09-01          conversion  -2852.13       NaN    NaN  26.83             NaN         NaN
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to revenue
+
+**********************
+'transfer into account',
+{'Morgan_Stanley'}
+- if symbol is not  'DIS', add amount to cost
+
+**********************
+'return of capital',
+{'Scottrade_V2', 'Scottrade'}
+- add amount to revenue
+
+**********************
+'stock spin-off',
+{'Morgan_Stanley'}
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to cost
+
+**********************
+'ira distribution',
+{'Scottrade_V2', 'Scottrade'}
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add amount to revenue
+
+**********************
+'ira intrl trnsfr in',
+- calculate amount if nan or zero. If nan and price or close available, amount is negative from quantity
+- add to cost
+
+NOT SURE:
+'corporate action',
+
+NOT CHECKED:
+'totals',

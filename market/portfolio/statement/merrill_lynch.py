@@ -10,19 +10,111 @@ class Merrill_Lynch():
         self.statement = statement
         self.accounts = {}
 
-        # if self.statement.pdf_file != 'database/statements_ml\\7WA 15527-2013-10-12.pdf': return
+        # TODO statement below gives empty account number
+        # if self.statement.pdf_file != 'database/statements_ml\\7WA 15527-2012-01-03.pdf': return
 
-        return
+        # return
 
-        print('')
-        print('%s: %s' % (self.name, self.statement.pdf_file))
+        # print('')
+        # print('%s: %s' % (self.name, self.statement.pdf_file))
 
         self.__set_name_pages()
         self.__set_accounts_info()
         self.__set_holdings()
+        self.__set_transactions()
 
         # pp(self.__name_pages['accounts'])
-        pp(self.accounts)
+        # pp(self.accounts)
+        # if self.statement.pdf_file == 'database/statements_ml\\7WA 15527-2011-10-12.pdf':
+        #     pp(self.accounts)
+        # if self.statement.pdf_file == 'database/statements_ml\\7WA 15527-2012-01-03.pdf':
+        #     pp(self.accounts)
+
+    def __set_transactions(self):
+        for account_number, account_data in self.__name_pages['accounts'].items():
+            # print(account_number)
+            
+            children = account_data['Account']['children']
+            
+            activities = [
+                'DIVIDENDS/INTEREST INCOME TRANSACTIONS',
+                'DIVIDENDS/INTEREST',
+                'SECURITY TRANSACTIONS',
+                'SECURITIES YOU TRANSFERRED IN/OUT',
+                'SECURITIES',
+            ]
+
+            for activity in activities:
+                lines = children[activity]['lines']
+                if len(lines) > 0:
+                    # print('\t%s' % activity)
+                    self.__get_transactions(lines, account_number, activity)
+
+    def __get_transactions(self, lines, account_number, activity):
+        account = self.accounts[account_number]
+        current_transaction = {}
+        for line_index in range(len(lines)):
+            line = lines[line_index]
+            line_digits = line.replace('/', '')
+            if line_digits.isdigit() and line != line_digits and len(line_digits) <= 4:
+                # create a datetime object from the date line
+                date_elements = line.split('/')
+                date = datetime(month=int(date_elements[0]), day=int(date_elements[1]), year=account['end_date'].year)
+
+                if 'transaction_date' in current_transaction:
+                    self.__parse_transaction(current_transaction, activity)
+                    self.__add_transaction(current_transaction, account_number)
+                
+                current_transaction = {'transaction_date': date, 'lines': []}
+
+            elif 'transaction_date' in current_transaction:
+                current_transaction['lines'].append(line)
+        
+        # make sure the last transaction is added if needed
+        if 'transaction_date' in current_transaction:
+            self.__parse_transaction(current_transaction, activity)
+            self.__add_transaction(current_transaction, account_number)
+
+    def __add_transaction(self, transaction, account_number):
+        account = self.accounts[account_number]
+        if not 'type' in transaction: return
+        security = transaction.pop('security')
+        account['holdings'][security]['transactions'].append(transaction)
+
+    def __parse_transaction(self, transaction, activity):
+        lines = transaction.pop('lines')
+        quantity = None
+        price = None
+        amount = None
+        if activity == 'DIVIDENDS/INTEREST INCOME TRANSACTIONS':
+            start_idex = 0
+            if lines[0] == '*': start_idex = 1
+            transaction_type = lines[start_idex].replace('*', '').strip()
+            security = lines[start_idex+1].strip()
+            amount = self.__get_float(lines[start_idex+2].strip())
+        elif activity == 'DIVIDENDS/INTEREST':
+            start_idex = 0
+            if lines[0] == '*': start_idex = 1
+            transaction_type = lines[start_idex].replace('*', '').strip()
+            security = lines[start_idex+1].strip()
+            amount = self.__get_float(lines[start_idex+2].strip())
+        elif activity == 'SECURITY TRANSACTIONS':
+            transaction_type = lines[1].replace('*', '').strip()
+            security = lines[0].strip()
+            quantity = self.__get_float(lines[2].strip())
+            price = self.__get_float(lines[3].strip())
+        elif activity in ['SECURITIES YOU TRANSFERRED IN/OUT', 'SECURITIES']:
+            transaction_type = lines[1].replace('*', '').strip()
+            security = lines[0].strip()
+            quantity = self.__get_float(lines[2].strip())
+            transaction['value'] = self.__get_float(lines[3].strip())
+        transaction['type'] = transaction_type
+        transaction['security'] = security
+        transaction['quantity'] = quantity
+        transaction['price'] = price
+        transaction['amount'] = amount
+
+        # pp(transaction)
 
     def __set_holdings(self):
         for account_number, account_data in self.__name_pages['accounts'].items():
@@ -31,7 +123,7 @@ class Merrill_Lynch():
 
             lines = children['EQUITIES']['lines']
             if len(lines) > 0:
-                print('\tEQUITIES')
+                # print('\tEQUITIES')
                 self.__add_stock(lines, account_number)
 
     def __add_stock(self, lines, account_number):
@@ -42,7 +134,10 @@ class Merrill_Lynch():
         lines = lines[lines.index('Yield%')+1:]
         security = lines[0].strip()
         symbol = lines[1].strip()
-        quantity = self.__get_float(lines[3].strip())
+        if 'Subtotal' in lines:
+            quantity = self.__get_float(lines[lines.index('Subtotal')+1])
+        else:
+            quantity = self.__get_float(lines[3].strip())
         account['holdings'][security] = {
             'type': 'stock', 'symbol': symbol, 'cusip': None, 'date': account['end_date'], 'quantity': quantity, 'transactions': []}
 
@@ -87,8 +182,31 @@ class Merrill_Lynch():
             'Account': {
                 'pages': [],
                 'children': {
+                    # Holdings
                     'EQUITIES': {
                         'stop': 'TOTAL',
+                        'lines': [],
+                    },
+
+                    # Activity
+                    'DIVIDENDS/INTEREST INCOME TRANSACTIONS': {
+                        'stop': 'NET TOTAL',
+                        'lines': [],
+                    },
+                    'DIVIDENDS/INTEREST': {
+                        'stop': 'NET',
+                        'lines': [],
+                    },
+                    'SECURITY TRANSACTIONS': {
+                        'stop': 'TOTAL',
+                        'lines': [],
+                    },
+                    'SECURITIES YOU TRANSFERRED IN/OUT': {
+                        'stop': 'NET TOTAL',
+                        'lines': [],
+                    },
+                    'SECURITIES': {
+                        'stop': 'NET',
                         'lines': [],
                     },
                 },
@@ -98,22 +216,23 @@ class Merrill_Lynch():
         for page_num, blocks in self.statement.get_blocks().items():
             for block_idx in range(len(blocks)):
                 block = blocks[block_idx]
-                if block[0].startswith('Account'):
-                    account_number = block[0]
-                    if len(account_number) <= 15:
-                        account_number = ' '.join(block[0:2])
-                    account_number = account_number.split(':')[1].strip()
-                    if account_number not in self.__name_pages['accounts']:
-                        self.__name_pages['accounts'][account_number] = {}
-                        self.__name_pages['accounts'][account_number]['Account'] = copy.deepcopy(self.__name_pages['Account'])
-                    self.__name_pages['accounts'][account_number]['Account']['pages'].append(page_num)
-                    break
+                for line in block:
+                    if line.startswith('Account Number:'):
+                        account_number = line
+                        if len(account_number) <= 15:
+                            account_number_idx = block.index(line)
+                            account_number = ' '.join(block[account_number_idx:account_number_idx+2])
+                        account_number = account_number.split(':')[1].strip()
+                        if account_number not in self.__name_pages['accounts']:
+                            self.__name_pages['accounts'][account_number] = {}
+                            self.__name_pages['accounts'][account_number]['Account'] = copy.deepcopy(self.__name_pages['Account'])
+                        self.__name_pages['accounts'][account_number]['Account']['pages'].append(page_num)
+                        break
 
         for account_number, account_data in self.__name_pages['accounts'].items():
             for pages_name, page_data in account_data.items():
                 if len(page_data['pages']) > 0:
                     if len(page_data['children']) > 0:
-                        print(page_data['pages'])
                         lines = []
                         for page_num in page_data['pages']:
                             blocks = self.statement.get_page_blocks(page_num)
@@ -133,14 +252,18 @@ class Merrill_Lynch():
             if current_name != None:
                 if 'stop' in name_pages[current_name]:
                     if line == name_pages[current_name]['stop']:
-                        print('stop: %s - with: %s' % (current_name, line))
+                        # print('stop: %s - with: %s' % (current_name, line))
                         name_pages[current_name]['lines'] = current_lines
                         current_name = None
                         current_lines = []
                         continue
             
             if line in name_pages:
-                print('start: new: %s - old: %s' % (line, current_name))
+                if current_name != None:
+                    continue
+                    # print('%s: %s' % (self.name, self.statement.pdf_file))
+                    # print('not stopped: %s before start of: %s' % (current_name, key))
+                # print('start: new: %s - old: %s' % (line, current_name))
                 current_name = line
                 current_lines = []
                 continue
@@ -150,6 +273,9 @@ class Merrill_Lynch():
         
         if current_name != None:
             pass
+            # print('last current name not stopped: %s' % current_name)
+            # print('stop: %s - with: %s' % (current_name, line))
+            # name_pages[current_name]['lines'] = current_lines
             # raise Exception('last current name not stopped: %s' % current_name)
             # print('%s: %s' % (self.name, self.statement.pdf_file))
             # print(current_name)

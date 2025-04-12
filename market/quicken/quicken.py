@@ -2,7 +2,7 @@ from pprint import pp
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from ..portfolio_old import Portfolio
+# from ..portfolio_old import Portfolio
 
 class QIF():
     def __init__(self, qif_file):
@@ -195,60 +195,60 @@ class Quicken():
         securities = pd.DataFrame(self.qif.securities)
         return securities
 
-    def get_portfolios(self):
-        # group by shares functionality
-        shares_in = ['Buy', 'ShrsIn', 'ReinvDiv', 'ReinvLg', 'ReinvSh']
-        shares_out = ['Sell', 'ShrsOut']
-        shares_split = ['StkSplit']
+    # def get_portfolios(self):
+    #     # group by shares functionality
+    #     shares_in = ['Buy', 'ShrsIn', 'ReinvDiv', 'ReinvLg', 'ReinvSh']
+    #     shares_out = ['Sell', 'ShrsOut']
+    #     shares_split = ['StkSplit']
         
-        # find security symbols
-        securities = self.get_securities()
-        securities.drop_duplicates(subset='name', keep='first', inplace=True)
-        securities.set_index('name', verify_integrity=True, inplace=True)
+    #     # find security symbols
+    #     securities = self.get_securities()
+    #     securities.drop_duplicates(subset='name', keep='first', inplace=True)
+    #     securities.set_index('name', verify_integrity=True, inplace=True)
 
-        # create portfolios
-        portfolios = []
-        for account in self.get_investment_accounts():
-            # print(account['transactions']['action'].unique())
+    #     # create portfolios
+    #     portfolios = []
+    #     for account in self.get_investment_accounts():
+    #         # print(account['transactions']['action'].unique())
 
-            # get sharesin transactions
-            df_transactions_in = account['transactions'][account['transactions']['action'].isin(shares_in)]
-            df_transactions_in = df_transactions_in.dropna(subset='shares')
-            df_transactions_in = df_transactions_in[['date', 'action', 'shares', 'amount', 'security']]
-            df_transactions_in['symbol'] = df_transactions_in['security'].map(securities['symbol'])
-            df_transactions_in['price'] = df_transactions_in['amount'] / df_transactions_in['shares']
+    #         # get sharesin transactions
+    #         df_transactions_in = account['transactions'][account['transactions']['action'].isin(shares_in)]
+    #         df_transactions_in = df_transactions_in.dropna(subset='shares')
+    #         df_transactions_in = df_transactions_in[['date', 'action', 'shares', 'amount', 'security']]
+    #         df_transactions_in['symbol'] = df_transactions_in['security'].map(securities['symbol'])
+    #         df_transactions_in['price'] = df_transactions_in['amount'] / df_transactions_in['shares']
 
-            # get shares out transactions
-            df_transactions_out = account['transactions'][account['transactions']['action'].isin(shares_out)]
-            df_transactions_out = df_transactions_out.dropna(subset='shares')
-            df_transactions_out = df_transactions_out[['date', 'action', 'shares', 'amount', 'security']]
-            df_transactions_out['symbol'] = df_transactions_out['security'].map(securities['symbol'])
-            df_transactions_out['price'] = df_transactions_out['amount'] / df_transactions_out['shares']
-            df_transactions_out['shares'] = -df_transactions_out['shares']
-            df_transactions_out['amount'] = -df_transactions_out['amount']
+    #         # get shares out transactions
+    #         df_transactions_out = account['transactions'][account['transactions']['action'].isin(shares_out)]
+    #         df_transactions_out = df_transactions_out.dropna(subset='shares')
+    #         df_transactions_out = df_transactions_out[['date', 'action', 'shares', 'amount', 'security']]
+    #         df_transactions_out['symbol'] = df_transactions_out['security'].map(securities['symbol'])
+    #         df_transactions_out['price'] = df_transactions_out['amount'] / df_transactions_out['shares']
+    #         df_transactions_out['shares'] = -df_transactions_out['shares']
+    #         df_transactions_out['amount'] = -df_transactions_out['amount']
 
-            # get split transactions
-            df_transactions_split = account['transactions'][account['transactions']['action'].isin(shares_split)]
-            df_transactions_split = df_transactions_split.dropna(subset='shares')
-            df_transactions_split = df_transactions_split[['date', 'action', 'shares', 'amount', 'security']]
-            df_transactions_split['symbol'] = df_transactions_split['security'].map(securities['symbol'])
-            df_transactions_split['price'] = np.nan
-            df_transactions_split['shares'] = df_transactions_split['shares'] / 10
+    #         # get split transactions
+    #         df_transactions_split = account['transactions'][account['transactions']['action'].isin(shares_split)]
+    #         df_transactions_split = df_transactions_split.dropna(subset='shares')
+    #         df_transactions_split = df_transactions_split[['date', 'action', 'shares', 'amount', 'security']]
+    #         df_transactions_split['symbol'] = df_transactions_split['security'].map(securities['symbol'])
+    #         df_transactions_split['price'] = np.nan
+    #         df_transactions_split['shares'] = df_transactions_split['shares'] / 10
 
-            # get dividend payouts
-            df_transactions_div = account['transactions'][account['transactions']['action'] == 'Div']
-            df_transactions_div = df_transactions_div[['date', 'action', 'shares', 'amount', 'security']]
-            df_transactions_div['symbol'] = df_transactions_div['security'].map(securities['symbol'])
-            df_transactions_div['price'] = np.nan
+    #         # get dividend payouts
+    #         df_transactions_div = account['transactions'][account['transactions']['action'] == 'Div']
+    #         df_transactions_div = df_transactions_div[['date', 'action', 'shares', 'amount', 'security']]
+    #         df_transactions_div['symbol'] = df_transactions_div['security'].map(securities['symbol'])
+    #         df_transactions_div['price'] = np.nan
 
-            # combine them and reset index
-            df_transactions = pd.concat(
-                [df_transactions_in, df_transactions_out, df_transactions_split, df_transactions_div])
-            df_transactions = df_transactions.sort_values(by='date')
-            df_transactions = df_transactions.set_index('date')
+    #         # combine them and reset index
+    #         df_transactions = pd.concat(
+    #             [df_transactions_in, df_transactions_out, df_transactions_split, df_transactions_div])
+    #         df_transactions = df_transactions.sort_values(by='date')
+    #         df_transactions = df_transactions.set_index('date')
 
-            # create portfolios
-            portfolio = Portfolio(account['name'], df_transactions)
-            portfolios.append(portfolio)
+    #         # create portfolios
+    #         portfolio = Portfolio(account['name'], df_transactions)
+    #         portfolios.append(portfolio)
 
-        return portfolios
+    #     return portfolios

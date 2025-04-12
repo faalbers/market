@@ -5,5 +5,7 @@ from .etrade import Etrade
 from .fidelity import Fidelity
 from .fidelity_v2 import Fidelity_V2
 from .scottrade import Scottrade
+from .scottrade_v2 import Scottrade_V2
 from .merrill_lynch import Merrill_Lynch
+from .merrill_lynch_v2 import Merrill_Lynch_V2
 from .citi import Citi

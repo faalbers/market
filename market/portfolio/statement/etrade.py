@@ -12,11 +12,13 @@ class Etrade():
 
         # if self.statement.pdf_file != 'database/statements_ms\\Etrade 2014-07-08.pdf': return
         # if self.statement.pdf_file != 'database/statements_ms\\RO_2022_11.pdf': return
+        # if self.statement.pdf_file != 'database/statements_ms\\Etrade 2012-10-12.pdf': return
+        # if self.statement.pdf_file != 'database/statements_ms\\Etrade 2011-10-12.pdf': return
 
-        return
+        # return
 
-        print('')
-        print('%s: %s' % (self.name, self.statement.pdf_file))
+        # print('')
+        # 
     
         self.__set_name_pages()
         self.__set_accounts_info()
@@ -24,7 +26,9 @@ class Etrade():
         self.__set_transactions()
 
         # pp(self.__name_pages['accounts'])
-        # pp(self.accounts)
+        # if self.statement.pdf_file == 'database/statements_ms\\RO_2021_12.pdf':
+        #     print('%s: %s' % (self.name, self.statement.pdf_file))
+        #     pp(self.accounts)
 
     def __set_transactions(self):
         for account_number, account_data in self.__name_pages['accounts'].items():
@@ -35,6 +39,7 @@ class Etrade():
             activities = [
                 'SECURITIES PURCHASED OR SOLD',
                 'MUTUAL FUNDS PURCHASED OR SOLD',
+                'MONEY FUND ACTIVITY (',
                 'DIVIDENDS & INTEREST ACTIVITY',
                 'OTHER ACTIVITY',
             ]
@@ -105,6 +110,11 @@ class Etrade():
         if security in account['holdings']:
             account['holdings'][security]['transactions'].append(transaction)
         else:
+            # HACK this is a major hack
+            if security.startswith('WALT DISNEY CO'): security = 'WALT DISNEY CO'
+            # if security.startswith('JPMORGAN TR II LIQUID ASSETS MONEY MKT'):
+            #     print('BLAH')
+
             account['holdings'][security] = {'type': None, 'symbol': symbol, 'cusip': cusip, 'date': account['end_date'], 'transactions': []}
             account['holdings'][security]['transactions'].append(transaction)
 
@@ -115,7 +125,9 @@ class Etrade():
         transaction_types = [ 
             'Bought', 'Sold', # 'SECURITIES PURCHASED OR SOLD', 'MUTUAL FUNDS PURCHASED OR SOLD'
             'Dividend', 'Capital Gain', # 'DIVIDENDS & INTEREST ACTIVITY'
-            'Dividend', 'Reinvest', 'Redemption', 'Conversion', 'Merger', 'Fee', 'Adjustment', 'Journal', 'Receive', 'Cash-in-Lieu', # 'OTHER ACTIVITY'
+            'Dividend', 'Reinvest', 'Redemption', 'Conversion', 'Merger', 'Fee', 'Adjustment', 'Journal', 'Receive', 'Cash-in-Lieu', 'Other', 'R&D', # 'OTHER ACTIVITY'
+            # 'Deposit', 'Withdrawal', 'Exchange', # 'MONEY FUND ACTIVITY ('
+            'Deposit', 'Withdrawal', 'Exchange', # 'MONEY FUND ACTIVITY ('
         ]
         
         # get transaction type
@@ -152,19 +164,62 @@ class Etrade():
             transaction['price'] = self.__get_float(values[1])
             # transaction['amount'] = self.__get_float(values[2])
 
+        elif transaction_type in ['Deposit', 'Withdrawal', 'Exchange']:
+            # HACK as there ever was one
+            if len(lines) == 3:
+                security = lines[1].lstrip('*')
+            else:
+                security = ' '.join(lines[1:3]).lstrip('*')
+            if security.endswith(' MONTHLY DIVIDEND REINVESTED'):
+                transaction['type'] = 'Reinvest'
+                transaction['security'] = security.replace(' MONTHLY DIVIDEND REINVESTED', '')
+                transaction['quantity'] = self.__get_float(values[0])
+                transaction['amount'] = -transaction['quantity']
+            elif security.endswith(' INTRADAY PURCHASE'):
+                transaction['type'] = 'Reinvest'
+                transaction['security'] = security.replace(' INTRADAY PURCHASE', '')
+                transaction['quantity'] = self.__get_float(values[0])
+                transaction['amount'] = -transaction['quantity']
+            else:
+                if transaction['type'] == 'Deposit':
+                    transaction['security'] = security
+                    transaction['type'] = 'Bought'
+                    transaction['quantity'] = self.__get_float(values[0])
+                    transaction['amount'] = -transaction['quantity']
+                elif transaction['type'] == 'Withdrawal':
+                    transaction['security'] = security
+                    transaction['type'] = 'Sold'
+                    transaction['quantity'] = self.__get_float(values[0])
+                    transaction['amount'] = -transaction['quantity']
+                elif transaction['type'] == 'Exchange':
+                    transaction['security'] = security
+                    transaction['type'] = 'Adjustment'
+                    transaction['quantity'] = self.__get_float(values[0])
+
         # amount: Dividend, Capital Gain, Fee, Cash-in-Lieu
         elif transaction_type in ['Dividend', 'Capital Gain', 'Fee', 'Cash-in-Lieu']:
             transaction['amount'] = self.__get_float(values[0])
+            # HACK
+            if transaction_type == 'Dividend':
+                if transaction['comments'] != None and transaction['comments'].startswith('S/T CAPITAL GAIN'):
+                    transaction['type'] = 'Capital Gain'
 
         # quantity, amount: Reinvest, Redemption
         elif transaction_type in ['Reinvest', 'Redemption']:
             transaction['quantity'] = self.__get_float(values[0])
             transaction['amount'] = self.__get_float(values[1])
+        
+        # quantity, amount: Other
+        elif transaction_type in ['Other', 'R&D']:
+            transaction['quantity'] = self.__get_float(values[0])
 
         # quantity: Adjustment, Conversion, Journal, Receive
         elif transaction_type in ['Adjustment', 'Conversion', 'Journal', 'Receive']:
             transaction['quantity'] = self.__get_float(values[0])
-
+            # HACK 
+            if transaction['comments'] == 'TFR TO TYPE 1':
+                transaction.pop('type')
+        
         # quantity or [quantity, amount]: Merger
         elif transaction_type in ['Merger']:
             transaction['quantity'] = self.__get_float(values[0])
@@ -174,8 +229,6 @@ class Etrade():
         else:
             pass
             # print(transaction['type'])
-        
-        # pp(transaction)
 
     def __fix_security_name(self, security, symbol, cusip):
         account = self.accounts[list(self.accounts.keys())[0]]
@@ -299,17 +352,36 @@ class Etrade():
 
         while len(lines) > 0:
             lines[0] = lines[0].lstrip('*')
+            # find line for ACCT TYPE
             if 'Cash' in lines and 'StkPln' in lines: next_idx = min(lines.index('Cash'), lines.index('StkPln'))
             elif 'Cash' in lines and not 'StkPln' in lines: next_idx = lines.index('Cash')
             elif not 'Cash' in lines and 'StkPln' in lines: next_idx = lines.index('StkPln')
             else:
                 raise Exception('No Cash or StkPln in stock holdings')
+            
+            is_cash = 'Cash' in lines
             security = ' '.join(lines[:next_idx-1]).strip()
             symbol = lines[next_idx-1].strip()
             symbol, cusip = self.__get_symbol_cusip(symbol)
-            quantity = self.__get_float(lines[next_idx+1])
-            account['holdings'][security] = {
-                'type': stock_type, 'symbol': symbol, 'cusip': cusip, 'quantity': quantity, 'date': account['end_date'], 'total_cost': None, 'transactions': []}
+            
+            # find index of last numeric line
+            end_idx = next_idx+1
+            while(end_idx < len(lines) and self.__get_float(lines[end_idx]) != None): end_idx += 1
+            end_idx -= next_idx+1
+            
+            # check for quantity value
+            quantity = None
+            if end_idx > 3: quantity = self.__get_float(lines[next_idx+1])
+            # since securities can have more the one entry, we combine them
+            # talking specifically about DIS
+            if not security in account['holdings']:
+                account['holdings'][security] = {
+                    'type': stock_type, 'symbol': symbol, 'cusip': cusip, 'quantity': quantity, 'date': account['end_date'], 'total_cost': None, 'transactions': []}
+            else:
+                if account['holdings'][security]['quantity'] == None:
+                    account['holdings'][security]['quantity'] = quantity
+                elif quantity != None:
+                    account['holdings'][security]['quantity'] += quantity
             next_idx += 2
             while not lines[next_idx].isupper():
                 next_idx += 1
@@ -364,7 +436,7 @@ class Etrade():
         security = 'JP MORGAN CHASE BANK NA C/D FDIC ' + cusip
         face_value = self.__get_float(values[0])
         account['holdings'][security] = {
-            'type': 'cd', 'symbol': None, 'cusip': cusip, 'face_value': face_value, 'date': account['end_date'], 'total_cost': None, 'rate': rate,
+            'type': 'cd', 'symbol': None, 'cusip': cusip, 'face_value': face_value, 'quantity': face_value, 'date': account['end_date'], 'total_cost': None, 'rate': rate,
             'issue_date': issue_date, 'mature_date': mature_date, 'transactions': []}
 
     def __add_t_bill(self, lines, account_number):
@@ -392,7 +464,7 @@ class Etrade():
         if len(values) >= 5:
             face_value = self.__get_float(values[0])
         account['holdings'][security] = {
-            'type': 't bill', 'symbol': None, 'cusip': cusip, 'face_value': face_value, 'date': account['end_date'], 'total_cost': None,
+            'type': 't bill', 'symbol': None, 'cusip': cusip, 'face_value': face_value, 'quantity': face_value, 'date': account['end_date'], 'total_cost': None,
             'issue_date': issue_date, 'mature_date': mature_date, 'reissue_date': reissue_date, 'transactions': []}
 
     def __trim_lines(self, lines, page_name, start_string=None):
@@ -513,10 +585,12 @@ class Etrade():
                         'stop': ['TOTAL MUTUAL FUNDS ACTIVITY'],
                         'lines': [],
                     },
-                    
-                    # # 'MONEY FUND ACTIVITY ('
                     'DIVIDENDS & INTEREST ACTIVITY': {
                         'stop': ['TOTAL DIVIDENDS & INTEREST ACTIVITY'],
+                        'lines': [],
+                    },
+                    'MONEY FUND ACTIVITY (': {
+                        'stop': ['CLOSING BALANCE'],
                         'lines': [],
                     },
                     'CONTRIBUTIONS & DISTRIBUTIONS ACTIVITY': {
@@ -570,7 +644,6 @@ class Etrade():
         current_name = None
         current_lines = []
         for line in lines:
-            
             # check if current lines block should be stopped
             if current_name != None:
                 if 'stop' in name_pages[current_name]:
@@ -582,7 +655,7 @@ class Etrade():
                             current_name = None
                             current_lines = []
                             break
-                    if current_name == None: continue
+                    # if current_name == None: continue
             
             found_start = False
             # check if current lines block should start

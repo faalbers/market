@@ -1,0 +1,96 @@
+statement:
+statement.name = '...'
+self.statement.pdf_file = 'statement.pdf'
+statement.accounts = {
+    account_number: {
+        'type': '...',
+        'statement': 'statement.pdf',
+        'start_date': Datetime(),
+        'end_date': Datetime(),
+        'holdings': {
+            security: {
+                'symbol': {'DIS', ... , None},
+                'cusip': {'NH1234567', ... , None},
+                'date': Datetime(),
+                'quantity': 12345,
+                'type': '...',
+                'price': 123.0, 
+                'rate': 0.3, 
+                'issue_date': Datetime(), 
+                'reissue_date': Datetime(), 
+                'mature_date: Datetime(), 
+                'face_value': 123.45, 
+                'total_cost': 123.45, 
+                'transactions': [
+                    {
+                        'transaction_date': Datetime(),
+                        'settlement_date': Datetime(),
+                        'type': '...',
+                        'comments': '...',
+                        'statement': '...',
+                        'quantity': 1234.56,
+                        'amount': 1234.56,
+                        'price': 1234.56,
+                    },
+                ]
+            }, ...
+        }
+    }
+}
+
+broker_name = {'Morgan_Stanley', 'Scottrade', 'Etrade', 'Merrill_Lynch', 'Fidelity', 'Fidelity_V2', 'Citi'}
+
+statement_accounts:
+broker_name: {
+    account_number: [ # list of statements
+        {
+            'type': '...',
+            'statement': 'statement.pdf',
+            'start_date': Datetime(),
+            'end_date': Datetime(),
+            'holdings': {
+                security: {
+                    'symbol': {'DIS', ... , None},
+                    'cusip': {'NH1234567', ... , None},
+                    'date': Datetime(),
+                    'quantity': 12345,
+                    'type': '...',
+                    'price': 123.0, 
+                    'rate': 0.3, 
+                    'issue_date': Datetime(), 
+                    'reissue_date': Datetime(), 
+                    'mature_date: Datetime(), 
+                    'face_value': 123.45, 
+                    'total_cost': 123.45, 
+                    'transactions': [
+                        {
+                            'transaction_date': Datetime(),
+                            'settlement_date': Datetime(),
+                            'type': '...',
+                            'comments': '...',
+                            'statement': '...',
+                            'quantity': 1234.56,
+                            'amount': 1234.56,
+                            'price': 1234.56,
+                        },
+                    ]
+                }, ...
+            }
+        }, ...
+    ]
+}
+
+accounts:
+account_number: {
+    'broker': broker_name,
+    'holding': {
+        'DIS': {
+            'name': 'security found name',
+            'last_quantity': 0,
+            'current_quantity': 0,
+            'last_total_cost': 0,
+            'current_total_cost': 0,
+            'transactions': pd.Dataframe(),
+        }, ...
+    }
+}
