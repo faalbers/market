@@ -1,4 +1,4 @@
-statement:
+statement: (Morgan_Stanley, Fidelity, etc) created by each parser for each statement
 statement.name = '...'
 self.statement.pdf_file = 'statement.pdf'
 statement.accounts = {
@@ -40,7 +40,7 @@ statement.accounts = {
 
 broker_name = {'Morgan_Stanley', 'Scottrade', 'Etrade', 'Merrill_Lynch', 'Fidelity', 'Fidelity_V2', 'Citi'}
 
-statement_accounts:
+statement_accounts: collection of statements in Porfolio
 broker_name: {
     account_number: [ # list of statements
         {
@@ -80,17 +80,20 @@ broker_name: {
     ]
 }
 
-accounts:
+accounts: collection of accounts in Portfolio
 account_number: {
     'broker': broker_name,
+    'start_date': Datetime(),
+    'end_date': Datetime(),
     'holding': {
         'DIS': {
             'name': 'security found name',
+            'transactions': pd.Dataframe(),
+            'statements': {'statement.pdf', ...},
             'last_quantity': 0,
             'current_quantity': 0,
             'last_total_cost': 0,
             'current_total_cost': 0,
-            'transactions': pd.Dataframe(),
         }, ...
     }
 }

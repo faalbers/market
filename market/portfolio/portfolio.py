@@ -1,4 +1,4 @@
-import glob, datetime, time, math
+import glob, datetime, time, os
 from .statement import *
 from pprint import pp
 import pandas as pd
@@ -7,7 +7,6 @@ from ..utils import *
 from ..tickers import Tickers
 from ..report import Report
 import matplotlib.pyplot as plt
-from dateutil.relativedelta import relativedelta
 import yfinance as yf
 
 class Portfolio():
@@ -73,6 +72,7 @@ class Portfolio():
                 'broker': account_data['broker'],
                 'start_date': account_data['start_date'],
                 'end_date': account_data['end_date'],
+                'statements': account_data['statements'],
                 'holdings': {}
             }
             for symbol, symbol_data in account_data['holdings'].items():
@@ -142,6 +142,8 @@ class Portfolio():
                 account_data['start_date'].strftime('%Y/%m/%d'),
                 account_data['end_date'].strftime('%Y/%m/%d')), r.getStyle('Heading1'))
 
+            # create holdings tables
+            r.addParagraph('Holdings', r.getStyle('Heading2'))
             holdings = sorted(account_data['holdings'])
             rows = []
             for symbol in holdings:
@@ -153,6 +155,17 @@ class Portfolio():
                 rows.append(row_data)
             holdings_table = pd.DataFrame(rows)
             r.addTable(holdings_table)
+
+            # create statements
+            r.addParagraph('Statements', r.getStyle('Heading2'))
+            for statement in account_data['statements']:
+                full_path = os.path.abspath(statement['statement'])
+                full_path = full_path.replace('\\', '/')
+                base_name = os.path.basename(statement['statement'])
+                html_link = '<a href="%s"><font color="blue">%s</font></a>' % (full_path, base_name)
+                statement_text = '<p>%s to %s: %s</p>' % (statement['start_date'].date(),statement['end_date'].date(), html_link)
+                r.addParagraph(statement_text)
+            
             r.addPageBreak()
 
             for symbol in holdings:
@@ -278,7 +291,12 @@ class Portfolio():
         transactions_viz.loc[is_reinvestments, 'reinvestments'] = -transactions_viz.loc[is_reinvestments, 'amount']
         
         # handle cumulatives
-        cumulatives = transactions_viz[['type', 'quantity', 'quantity_total', 'cost', 'cost_total','revenue', 'close']].copy()
+        cumulative_columns = [
+            'type',
+            'quantity', 'quantity_total', 'cost', 'cost_total', 'revenue', 'close',
+            'capital_gains', 'dividends', 'reinvestments'
+        ]
+        cumulatives = transactions_viz[cumulative_columns].copy()
 
         # get totals
         is_totals = cumulatives['type'] == 'totals'
@@ -306,11 +324,20 @@ class Portfolio():
             cumulatives = cumulatives.drop('cost_sum', axis=1)
         cumulatives = cumulatives.drop('cost_total', axis=1)
 
+        # create returns
+        cumulatives['returns'] = cumulatives['capital_gains'] + cumulatives['dividends']
+        cumulatives = cumulatives.drop(['capital_gains', 'dividends'], axis=1)
+
         # clean up cumulatives , group sum date indices and cumsum them
         cumulatives = cumulatives.drop('type', axis=1)
         cumulatives['quantity'] = cumulatives['quantity'].fillna(0.0)
         cumulatives = cumulatives.groupby(level=0).sum()
         cumulatives = cumulatives.cumsum()
+
+        # finally we add total gain
+        cumulatives['total_gain'] = cumulatives['revenue'] + cumulatives['returns'] \
+            - cumulatives['cost'] - cumulatives['reinvestments']
+        cumulatives = cumulatives.drop('reinvestments', axis=1)
 
         # handle actions
         actions = transactions_viz[['capital_gains', 'dividends', 'reinvestments']].copy()
@@ -357,11 +384,14 @@ class Portfolio():
         report_data['type'] = 'money market fund'
         # self.test.update(transactions['type'].unique())
         pass
-    
+
     def make_report_mf(self, transactions, info, report_data):
         # Mutual Fund
         report_data['type'] = 'mutual fund'
 
+        self.make_report_equity(transactions, info, report_data)
+
+    def make_report_equity(self, transactions, info, report_data):
         # do_a = info['account_number'] == '20960513' and info['symbol'] == 'RYBHX'
         do_a = info['symbol'] == 'RYBHX'
         # do_a = info['account_number'] == '354-526486-204'
@@ -388,10 +418,12 @@ class Portfolio():
         # add chart data
         if not isinstance(self.charts[info['symbol']], type(None)):
             transactions_viz_all = transactions_viz_all.join(self.charts[info['symbol']]['Close Splits']).ffill().bfill()
-            transactions_viz_all = transactions_viz_all.join(self.charts[info['symbol']]['Dividends']).fillna(0.0)
-            transactions_viz_all['Dividends'] = transactions_viz_all['Dividends'] * transactions_viz_all['quantity'].shift(1)
-            transactions_viz_all = transactions_viz_all.join(self.charts[info['symbol']]['Capital Gains']).fillna(0.0)
-            transactions_viz_all['Capital Gains'] = transactions_viz_all['Capital Gains'] * transactions_viz_all['quantity'].shift(1)
+            if 'Dividends' in self.charts[info['symbol']]:
+                transactions_viz_all = transactions_viz_all.join(self.charts[info['symbol']]['Dividends']).fillna(0.0)
+                transactions_viz_all['Dividends'] = transactions_viz_all['Dividends'] * transactions_viz_all['quantity'].shift(1)
+            if 'Capital Gains' in self.charts[info['symbol']]:
+                transactions_viz_all = transactions_viz_all.join(self.charts[info['symbol']]['Capital Gains']).fillna(0.0)
+                transactions_viz_all['Capital Gains'] = transactions_viz_all['Capital Gains'] * transactions_viz_all['quantity'].shift(1)
         else:
             transactions_viz_all['Close Splits'] = np.nan
             transactions_viz_all['Dividends'] = np.nan
@@ -399,18 +431,46 @@ class Portfolio():
         
         # add value
         transactions_viz_all['value'] = transactions_viz_all['quantity'] * transactions_viz_all['Close Splits']
-        
-        # print(transactions_viz_all[transactions_viz_all['capital_gains'] > 0.0].round(2))
-        # print(transactions_viz_all[transactions_viz_all['Capital Gains'] > 0.0].round(2))
+
+        # add value to 'total_gain'
+        transactions_viz_all['total_gain'] = transactions_viz_all['total_gain'] + transactions_viz_all['value']
+
+        # make 'total_cost'
+        transactions_viz_all['total_cost'] = transactions_viz_all['cost'] - transactions_viz_all['revenue']
 
         graph = { 'title': '<font color="green">Cost</font> / <font color="blue">Value</font>' }
-        fig, ax1 = plt.subplots(dpi=300, figsize=(7, 2.8))
-        ax1.plot(transactions_viz_all['cost'], color='green')
+        fig, ax1 = plt.subplots(dpi=300, figsize=(7, 2.6))
+        ax1.plot(transactions_viz_all['total_cost'], color='green')
         ax1.plot(transactions_viz_all['value'], color='blue')
         ax1.set_ylabel('$ amount')
         ax1.tick_params('x', labelsize=6)
         ax1.tick_params('y', colors='black')
         ax1.grid(True)
+        graph['fig'] = fig
+        plt.close(fig)
+        report_data['graphs_1'].append(graph)
+
+        if (transactions_viz_all['returns'] > 0.0).any():
+            graph = { 'title': '<font color="blue">Returns (Dividends + Capital Gains)</font>' }
+            fig, ax1 = plt.subplots(dpi=300, figsize=(7, 2.6))
+            ax1.plot(transactions_viz_all['returns'], color='blue')
+            ax1.set_ylabel('$ amount')
+            ax1.tick_params('x', labelsize=6)
+            ax1.tick_params('y', colors='black')
+            ax1.grid(True)
+            ax1.axhline(y=0.0, color='green', linestyle='--')
+            graph['fig'] = fig
+            plt.close(fig)
+            report_data['graphs_1'].append(graph)
+
+        graph = { 'title': '<font color="blue">Total Gain</font>' }
+        fig, ax1 = plt.subplots(dpi=300, figsize=(7, 2.6))
+        ax1.plot(transactions_viz_all['total_gain'], color='blue')
+        ax1.set_ylabel('$ amount')
+        ax1.tick_params('x', labelsize=6)
+        ax1.tick_params('y', colors='black')
+        ax1.grid(True)
+        ax1.axhline(y=0.0, color='green', linestyle='--')
         graph['fig'] = fig
         plt.close(fig)
         report_data['graphs_1'].append(graph)
@@ -465,6 +525,10 @@ class Portfolio():
     def make_report_stock(self, transactions, info, report_data):
         # Stock
         report_data['type'] = 'stock'
+        
+        self.make_report_equity(transactions, info, report_data)
+
+        return
         do_a = info['account_number'] == '20964911' and info['symbol'] == 'AIRN'
         # do_a = info['symbol'] == 'SOLV'
         # do_a = info['account_number'] == '20964911'
@@ -504,7 +568,10 @@ class Portfolio():
         
         # add value
         transactions_viz_all['value'] = transactions_viz_all['quantity'] * transactions_viz_all['Close Splits']
-        
+
+        # add value to 'total_gain'
+        transactions_viz_all['total_gain'] = transactions_viz_all['total_gain'] + transactions_viz_all['value']
+
         graph = { 'title': '<font color="green">Cost</font> / <font color="blue">Value</font>' }
         fig, ax1 = plt.subplots(dpi=300, figsize=(7, 2.8))
         ax1.plot(transactions_viz_all['cost'], color='green')
@@ -513,6 +580,18 @@ class Portfolio():
         ax1.tick_params('x', labelsize=6)
         ax1.tick_params('y', colors='black')
         ax1.grid(True)
+        graph['fig'] = fig
+        plt.close(fig)
+        report_data['graphs_1'].append(graph)
+
+        graph = { 'title': '<font color="blue">Total Gain ( including value and return )</font>' }
+        fig, ax1 = plt.subplots(dpi=300, figsize=(7, 2.8))
+        ax1.plot(transactions_viz_all['total_gain'], color='blue')
+        ax1.set_ylabel('$ amount')
+        ax1.tick_params('x', labelsize=6)
+        ax1.tick_params('y', colors='black')
+        ax1.grid(True)
+        ax1.axhline(y=0.0, color='green', linestyle='--')
         graph['fig'] = fig
         plt.close(fig)
         report_data['graphs_1'].append(graph)
@@ -599,23 +678,42 @@ class Portfolio():
                 if account_number == 'XXXX-2261': account_number = '6304-2261'
                 elif account_number == 'XXXX-7273': account_number = '3558-7273'
                 elif account_number == '156-109380-518': account_number = '814-109380-296'
-                # print(account_number)
+                
+                # create account if needed
                 if not account_number in self.accounts:
-                    self.accounts[account_number] = {'broker': set(), 'holdings': {}}
+                    self.accounts[account_number] = {'broker': set(), 'holdings': {}, 'statements': []}
+                
+                # we add multiple broker names because there can be different versions of same broker statements
                 self.accounts[account_number]['broker'].add(broker_name)
+                
+                # create a dated statements dictionary with end date keys
                 dated_statements = {}
                 for statement in statements:
                     dated_statements[statement['end_date']] = statement
+                
+
                 last_end_date = None
+                # sort the end dates and fill in the start and end dates for this account
                 sorted_dated_statements = sorted(dated_statements)
                 self.accounts[account_number]['start_date'] = dated_statements[sorted_dated_statements[0]]['start_date']
                 self.accounts[account_number]['end_date'] = dated_statements[sorted_dated_statements[-1]]['end_date']
+
+                # go through sorted statements and get transactions
+                last_end_date = None
                 for end_date in sorted_dated_statements:
                     statement = dated_statements[end_date]
+
+                    # add statement info to account
+                    self.accounts[account_number]['statements'].append(
+                        {'start_date': statement['start_date'], 'end_date': statement['end_date'], 'statement': statement['statement']}
+                    )
+
                     date_gap = True
                     if last_end_date != None and (statement['start_date'] - last_end_date) == datetime.timedelta(days=1):
                         date_gap = False
                     last_end_date = end_date
+
+                    # go through each security in each statement
                     for security, security_data in statement['holdings'].items():
                         # TODO re check moneymarket, does not make any sense
                         # skip the ones with None quantity (money market I can't get ammount or value from)
