@@ -68,14 +68,8 @@ class Market():
         sys.excepthook = self.builtin_excepthook
         self.log_queue.close()
 
-    def get_analysis(self, symbols):
-        return Analysis(symbols)
-    
     def get_tickers(self, symbols):
         return Tickers(symbols)
-    
-    # def get_quicken(self, file_name):
-    #     return Quicken(file_name)
     
     def get_us_market_tickers(self, update=False):
         symbols_data = self.vault.get_data(['us_symbols'], update=update)['us_symbols']
@@ -113,120 +107,30 @@ class Market():
         return Tickers(symbols_fixed)
 
     def get_scraped_tickers(self):
-        data_symbols = self.vault.get_data(['symbols'])['symbols']
+        data_symbols = self.vault.get_data(['symbols_scraped'])['symbols_scraped']
         symbols = set()
         for scrape_name, scrape_symbols in data_symbols.items():
             # for now only get yahoo_chart and yahoo_quote symbols
             symbols.update(scrape_symbols.keys())
         return Tickers(symbols)
+
+    def get_portfolio(self, update=False):
+        return Portfolio(update)
     
+    def get_quicken(self, qif_file):
+        return Quicken(qif_file)
+
+    def get_analysis(self, tickers):
+        return Analysis(tickers)
+
     def update_nightly(self, tickers=None):
         if not tickers or tickers.count == 0:
-            # TODO: Probably get_us_market_tickers if no symbols found
             tickers = self.get_scraped_tickers()
-        self.vault.update(['update_nightly'],tickers.get_symbols())
-
-    def update_test(self, symbols=[]):
-        self.vault.update(['update_test'],symbols)
-
-    def update_symbols(self, symbols):
-        symbols = [symbol.upper() for symbol in symbols]
-        self.vault.update(['update_symbols'],symbols)
+        tickers.update(['update'])
     
-    def __update_news_sentiment(self, db, llm, symbol_news_table, symbol, symbol_name, text_columns):
-        symbol_news_ts = db.table_read(symbol_news_table)
-        update_data = {}
-        article_count = len(symbol_news_ts) + 1
-        articles_updated = 0
-        for ts, news_data in symbol_news_ts.items():
-            if stop_text(): break
-            article_count -= 1
-            if len(update_data) >= 100:
-                db.table_write(symbol_news_table, update_data, 'timestamp', method='update')
-                db.commit()
-                articles_updated += len(update_data)
-                self.logger.info('Market: %s news articles updated     : %s (%s)' % (symbol, articles_updated, db.name))
-                self.logger.info('Market: %s news articles to sentiment: %s (%s)' % (symbol, article_count, db.name))
-                update_data = {}
-            if 'sentiment_llama' in news_data:
-                if news_data['sentiment_llama'] == 'NEUTRAL': continue
-                if news_data['sentiment_llama'] == 'POSITIVE': continue
-                if news_data['sentiment_llama'] == 'NEGATIVE': continue
-            news_text = ''
-            for column in text_columns:
-                if column in news_data and news_data[column]:
-                    news_text += news_data[column] + '. '
-            if news_text == '':
-                update_data[ts] = {'sentiment_llama': 'NEUTRAL'}
-                continue
-            if symbol_name:
-                invoke_text = f"Classify the sentiment about the stock symbol '{symbol}' or the stock name '{symbol_name}' as 'POSITIVE' or 'NEGATIVE' or 'NEUTRAL' with just that one word only, no additional words or reasoning: {news_text}"
-            else:
-                invoke_text = f"Classify the sentiment about the stock symbol '{symbol}' as 'POSITIVE' or 'NEGATIVE' or 'NEUTRAL' with just that one word only, no additional words or reasoning: {news_text}"
-            output = llm.invoke(invoke_text).upper()
-            if 'NEUTRAL' in output: output = 'NEUTRAL'
-            elif 'POSITIVE' in output: output = 'POSITIVE'
-            elif 'NEGATIVE' in output: output = 'NEGATIVE'
-            else: output = 'NEUTRAL'
-            update_data[ts] = {'sentiment_llama': output}
-        
-        # write the table
-        if len(update_data) > 0:
-            db.table_write(symbol_news_table, update_data, 'timestamp', method='update')
-            db.commit()
-            articles_updated += len(update_data)
-            self.logger.info('Market: %s news articles updated     : %s (%s)' % (symbol, articles_updated, db.name))
-
-    def update_news_sentiment(self, symbols=[]):
-        # make all symbols upper if any avalable
-        if len(symbols) > 0:
-            symbols = [symbol.upper() for symbol in symbols]
-        
-        # get profile of all available symbols
-        if len(symbols) == 0:
-            symbols_profile = self.vault.get_data(['profile'], key_values=symbols)['profile']
-        else:
-            symbols_profile = self.vault.get_data(['profile'])['profile']
-
-        # get Polygon and Finviz news and ollama server
-        db_polygon = Database('polygon_news')
-        db_polygon.backup()
-        table_reference_polygon = db_polygon.table_read('table_reference')
-        db_finviz = Database('finviz_ticker_news')
-        db_finviz.backup()
-        table_reference_finviz = db_finviz.table_read('table_reference')
-        
-        # start ollama
-        llm = OllamaLLM(model='llama3.1')
-
-        # use provided symbols or all availbae symbols in news database
-        if len(symbols) > 0:
-            symbols = sorted([symbol.upper() for symbol in symbols])
-        else:
-            symbols = sorted(set(table_reference_polygon.keys()).union(set(table_reference_finviz.keys())))
-
-        # go throug all symbols and their timeseries
-        self.logger.info('Market: Updating news sentiment on %d symbols' % len(symbols))
-        symbol_count = len(symbols) + 1
-        for symbol in symbols:
-            symbol_count -= 1
-            if symbol_count % 100 == 0: self.logger.info('Market: still %s symbols to check' % symbol_count)
-            # get symbol name
-            symbol_name = None
-            if symbol in symbols_profile: symbol_name = symbols_profile[symbol]['name']
-            
-            # handle with according database
-            if symbol in table_reference_polygon:
-                table_reference = table_reference_polygon[symbol]
-                self.__update_news_sentiment(db_polygon, llm, table_reference['news'], symbol, symbol_name, ['title', 'description'])
-                if stop_text(): break
-            if symbol in table_reference_finviz:
-                table_reference = table_reference_finviz[symbol]
-                self.__update_news_sentiment(db_finviz, llm, table_reference['news'], symbol, symbol_name, ['Title'])
-                if stop_text(): break
-        
-        if stop_text():
-            self.logger.info('Market: Updating news sentiment manually stopped')
+    def update_nightly_us_market(self):
+        tickers = self.get_us_market_tickers()
+        tickers.update(['update'])
 
     def make_porfolios_report(self):
         quicken = self.get_quicken('database/2020.QIF')
@@ -238,24 +142,6 @@ class Market():
             portfolio.add_report(report)
             report.buildDoc()
     
-    def get_portfolio(self):
-        return Portfolio()
-    
-    def get_quicken(self, qif_file):
-        return Quicken(qif_file)
-        
-    # def statements(self):
-    #     # pdf_files = glob.glob('database/statements/*.pdf')
-    #     pdf_files = glob.glob('etrade_statements/trust/*.pdf')
-    #     for pdf_file in pdf_files:
-    #         statement = Statement(pdf_file)
-    #         print()
-    #         print(statement.pdf_file)
-    #         print(statement.date)
-    #         print(len(statement.lines))
-    #         found_lines = statement.find_lines(['E*TRADE', 'ETRADE', '1-800-ETRADE', 'Morgan Stanley', 'Fidelity', 'Customer Update:'])
-    #         print(found_lines)
-
     def make_data_report(self):
         tickers = self.get_scraped_tickers()
         tickers.make_data_report()
