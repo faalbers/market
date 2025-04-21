@@ -165,6 +165,7 @@ class Merrill_Lynch():
                     if len(block) > 1 and block[1].startswith('- '):
                         date_string = ' '.join(block[:2]).strip()
                         break
+
         dates = date_string.split(' - ')
         start_date = datetime.strptime(dates[0].strip(), '%B %d, %Y')
         end_date = datetime.strptime(dates[1].strip(), '%B %d, %Y')
