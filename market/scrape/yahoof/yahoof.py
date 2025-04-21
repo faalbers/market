@@ -1,10 +1,10 @@
 from ratelimit import limits, sleep_and_retry
 from ...utils import stop_text
+import yfinance as yf
 
 class YahooF():
     @sleep_and_retry
-    @limits(calls=120, period=60)
-    # @limits(calls=2, period=1)
+    @limits(calls=67, period=60) # 4020/hour
     def exec_proc(self, proc, arguments):
         return proc(**arguments)
     
@@ -21,11 +21,19 @@ class YahooF():
                 self.db.commit()
                 failed = 0
             symbol = exec[0]
-            proc = exec[1]
+            procs = exec[1]
             arguments = exec[2]
-            result = self.exec_proc(proc, arguments)
-            self.push_api_data(symbol, result)
-            if not result[0]:
+            ticker = yf.Ticker(symbol)
+            arguments['ticker'] = ticker
+            result = [False, None, None]
+            for proc in procs:
+                proc_handle = proc(arguments['data'])
+                arguments['data'] = proc_handle[2]
+                if proc_handle[0]:
+                    result = self.exec_proc(proc_handle[1], arguments)
+                    arguments['data'] = result
+            self.push_api_data(symbol, arguments['data'])
+            if not arguments['data'][0]:
                 failed += 1
                 failed_total += 1
             count_done += 1

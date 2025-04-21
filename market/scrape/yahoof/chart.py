@@ -4,7 +4,6 @@ from ...database import Database
 from pprint import pp
 import yfinance as yf
 from datetime import datetime
-import pandas as pd
 
 class YahooF_Chart(YahooF):
     dbName = 'yahoof_chart'
@@ -12,8 +11,28 @@ class YahooF_Chart(YahooF):
     @staticmethod
     def get_table_names(table_name):
         return [table_name]
-    
-    def get_chart(self, symbol):
+
+    def get_chart(self, data=None):
+        def proc_chart(ticker, data):
+            while True:
+                try:
+                    info = ticker.info
+                    chart = ticker.history(period="10y",auto_adjust=False)
+                    data = chart
+                except Exception as e:
+                    if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
+                        self.logger.info('YahooF:  chart: Rate Limeit: wait 60 seconds')
+                        time.sleep(60)
+                        continue
+                    else:
+                        return ([False, data, e])
+                break
+            if chart.shape[0] == 0:
+                return ([False, data, 'empty'])
+            return ([True, data, 'ok'])
+        return [True, proc_chart, data]
+
+    def get_chart_old(self, symbol):
         while True:
             try:
                 ticker = yf.Ticker(symbol)
@@ -56,7 +75,10 @@ class YahooF_Chart(YahooF):
         # backup first
         self.db.backup()
 
-        exec_list = [[symbol, self.get_chart, {'symbol': symbol}] for symbol in symbols]
+        exec_list = [
+            [symbol, [
+                    self.get_chart,
+                ], {'ticker': None, 'data': None}] for symbol in symbols]
         self.multi_execs(exec_list)
 
     def update_check(self, symbols):
@@ -83,7 +105,6 @@ class YahooF_Chart(YahooF):
         return update_symbols
 
     def push_api_data(self, symbol, result):
-        # print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ': ', symbol)
         timestamp = int(datetime.now().timestamp())
         found = result[0]
         status_info = {
