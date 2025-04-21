@@ -12,14 +12,12 @@ import yfinance as yf
 class Portfolio():
     make_docs = True
     
-    def __init__(self):
+    def __init__(self, update=False):
+        self.update = update
+        # TODO cover both statements AND quicken ?
         # pd.set_option('display.max_rows', None)
         # pd.set_option('display.max_columns', None)
-        if False:
-            self.__make_accounts()
-            storage.save(self.accounts, 'statement_accounts')
-        else:
-            self.accounts = storage.load('statement_accounts')   
+        self.__make_accounts()
 
     def make_reports(self):
         # gather holdings profile and charts data
@@ -40,16 +38,6 @@ class Portfolio():
         # tickers.update(['update'])
         profiles = tickers.get_profiles()
         
-        # get charts
-        if False:
-            self.charts = {}
-            for symbol in symbols:
-                print('getting chart for %s' % symbol)
-                self.charts[symbol] = self.__get_chart(symbol, chart_start_date, chart_end_date)
-            storage.save(self.charts, 'statement_charts')
-        else:
-            self.charts = storage.load('statement_charts')
-
         # add Close Splits
         for symbol, chart in self.charts.items():
             if isinstance(chart, type(None)): continue
@@ -119,7 +107,7 @@ class Portfolio():
                         # TODO figure out what to do with these
                         # print(symbol_data['name'])
                         # print(transactions)
-                elif symbol.endswith('XX'): self.make_report_mm(transactions, transactions_info, report_data)
+                elif symbol.endswith('XX') and len(symbol) == 5: self.make_report_mm(transactions, transactions_info, report_data)
                 elif symbol.endswith('X'): self.make_report_mf(transactions, transactions_info, report_data)
                 elif len(symbol) <= 5: self.make_report_stock(transactions, transactions_info, report_data)
                 else:
@@ -367,10 +355,12 @@ class Portfolio():
         redeem_types = ['redeemed', 'redemption', 'transferred to', 'conversion']
         redeem_types = transactions_viz['type'].isin(redeem_types)
 
-        cost = -(transactions_viz[cost_types]['amount'].iloc[0])
-        redeem = transactions_viz[redeem_types]['amount'].iloc[0]
-        gain = redeem - cost
-        table = pd.DataFrame([ { 'cost': cost, 'redeem': redeem, 'gain': gain, } ])
+        table = {}
+        if cost_types.any(): table['cost'] = -(transactions_viz[cost_types]['amount'].iloc[0])
+        if redeem_types.any(): table['redeem'] = transactions_viz[redeem_types]['amount'].iloc[0]
+        if 'redeem' in table and 'cost' in table:
+            table['gain'] = table['redeem'] - table['cost']
+        table = pd.DataFrame([ table ])
         report_data['tables'].append(table)
     
     def make_report_nh(self, transactions, info, report_data):
@@ -528,89 +518,6 @@ class Portfolio():
         
         self.make_report_equity(transactions, info, report_data)
 
-        return
-        do_a = info['account_number'] == '20964911' and info['symbol'] == 'AIRN'
-        # do_a = info['symbol'] == 'SOLV'
-        # do_a = info['account_number'] == '20964911'
-        # do_a = 'Scottrade' in info['broker']
-        # do_a = info['account_number'].startswith('XX')
-        # do_b = info['account_number'] == '230-317600' and info['symbol'] == 'VBK'
-        # if not (do_a or do_b): return
-        # if not do_a: return
-
-        # create vizualization dataframe
-        transactions_viz = transactions.copy()
-
-        cumulatives, actions = self.handle_transactions_viz(transactions_viz, info)
-        
-        # make docs
-        if not self.make_docs: return
-
-        # create date range
-        date_range = pd.date_range(cumulatives.index[0], cumulatives.index[-1])
-        # date_range = pd.date_range('2024-11-01', '2024-12-30')
-        transactions_viz_all = pd.DataFrame(index=date_range)
-
-        # add cumulatives
-        transactions_viz_all = transactions_viz_all.join(cumulatives).ffill().bfill()
-
-        # add actions
-        transactions_viz_all = transactions_viz_all.join(actions).fillna(0)
-
-        # add chart data
-        if not isinstance(self.charts[info['symbol']], type(None)):
-            transactions_viz_all = transactions_viz_all.join(self.charts[info['symbol']]['Close Splits']).ffill().bfill()
-            transactions_viz_all = transactions_viz_all.join(self.charts[info['symbol']]['Dividends']).fillna(0.0)
-            transactions_viz_all['Dividends'] = transactions_viz_all['Dividends'] * transactions_viz_all['quantity'].shift(1)
-        else:
-            transactions_viz_all['Close Splits'] = np.nan
-            transactions_viz_all['Dividends'] = np.nan
-        
-        # add value
-        transactions_viz_all['value'] = transactions_viz_all['quantity'] * transactions_viz_all['Close Splits']
-
-        # add value to 'total_gain'
-        transactions_viz_all['total_gain'] = transactions_viz_all['total_gain'] + transactions_viz_all['value']
-
-        graph = { 'title': '<font color="green">Cost</font> / <font color="blue">Value</font>' }
-        fig, ax1 = plt.subplots(dpi=300, figsize=(7, 2.8))
-        ax1.plot(transactions_viz_all['cost'], color='green')
-        ax1.plot(transactions_viz_all['value'], color='blue')
-        ax1.set_ylabel('$ amount')
-        ax1.tick_params('x', labelsize=6)
-        ax1.tick_params('y', colors='black')
-        ax1.grid(True)
-        graph['fig'] = fig
-        plt.close(fig)
-        report_data['graphs_1'].append(graph)
-
-        graph = { 'title': '<font color="blue">Total Gain ( including value and return )</font>' }
-        fig, ax1 = plt.subplots(dpi=300, figsize=(7, 2.8))
-        ax1.plot(transactions_viz_all['total_gain'], color='blue')
-        ax1.set_ylabel('$ amount')
-        ax1.tick_params('x', labelsize=6)
-        ax1.tick_params('y', colors='black')
-        ax1.grid(True)
-        ax1.axhline(y=0.0, color='green', linestyle='--')
-        graph['fig'] = fig
-        plt.close(fig)
-        report_data['graphs_1'].append(graph)
-
-        if (transactions_viz_all['dividends'] > 0.0).any():
-            graph = { 'title': '<font color="green">Reported Dividends</font> / <font color="blue">Received Dividents</font>' }
-            fig, ax1 = plt.subplots(dpi=300, figsize=(7, 2.8))
-            bar_width = transactions_viz_all.shape[0] / 75.0
-            ax1.bar(transactions_viz_all.index, transactions_viz_all['Dividends'], color='green', alpha=0.5, width=bar_width)
-            ax1.bar(transactions_viz_all.index, transactions_viz_all['dividends'], color='blue', alpha=0.5, align='edge', width=bar_width)
-            ax1.set_ylabel('$ amount')
-            ax1.tick_params('x', labelsize=6)
-            ax1.tick_params('y', colors='black')
-            ax1.grid(True)
-            graph['fig'] = fig
-            plt.close(fig)
-            report_data['graphs_2'].append(graph)
-
-
     def __get_chart(self, symbol, chart_start_date, chart_end_date):
         while True:
             try:
@@ -629,9 +536,14 @@ class Portfolio():
             return chart
 
     def __make_accounts(self):
-        # parset statements
+        if not self.update:
+            self.accounts = storage.load('database/portfolio_accounts')
+            self.charts = storage.load('database/portfolio_charts')
+            return
+
+        # parse statements
         self.__parse_statements()
-        
+
         # gather all securities and their symbol and cusip
         securities = {}
         for broker_name, broker_data in self.statement_accounts.items():
@@ -685,41 +597,26 @@ class Portfolio():
                 
                 # we add multiple broker names because there can be different versions of same broker statements
                 self.accounts[account_number]['broker'].add(broker_name)
-                
-                # create a dated statements dictionary with end date keys
-                dated_statements = {}
+
                 for statement in statements:
-                    dated_statements[statement['end_date']] = statement
-                
+                    # add dates to account based on statement dates
+                    if not 'start_date' in self.accounts[account_number]:
+                        self.accounts[account_number]['start_date'] = statement['start_date']
+                    elif statement['start_date'] < self.accounts[account_number]['start_date']:
+                        self.accounts[account_number]['start_date'] = statement['start_date']
 
-                last_end_date = None
-                # sort the end dates and fill in the start and end dates for this account
-                sorted_dated_statements = sorted(dated_statements)
-                self.accounts[account_number]['start_date'] = dated_statements[sorted_dated_statements[0]]['start_date']
-                self.accounts[account_number]['end_date'] = dated_statements[sorted_dated_statements[-1]]['end_date']
-
-                # go through sorted statements and get transactions
-                last_end_date = None
-                for end_date in sorted_dated_statements:
-                    statement = dated_statements[end_date]
-
+                    if not 'end_date' in self.accounts[account_number]:
+                        self.accounts[account_number]['end_date'] = statement['end_date']
+                    elif statement['end_date'] > self.accounts[account_number]['end_date']:
+                        self.accounts[account_number]['end_date'] = statement['end_date']
+                    
                     # add statement info to account
                     self.accounts[account_number]['statements'].append(
                         {'start_date': statement['start_date'], 'end_date': statement['end_date'], 'statement': statement['statement']}
                     )
 
-                    date_gap = True
-                    if last_end_date != None and (statement['start_date'] - last_end_date) == datetime.timedelta(days=1):
-                        date_gap = False
-                    last_end_date = end_date
-
                     # go through each security in each statement
                     for security, security_data in statement['holdings'].items():
-                        # TODO re check moneymarket, does not make any sense
-                        # skip the ones with None quantity (money market I can't get ammount or value from)
-                        
-                        # if 'quantity' in security_data and security_data['quantity'] == None: continue
-                        
                         # find symbol or cusip for security
                         symbol = security_data['symbol']
                         if symbol == None:
@@ -734,40 +631,60 @@ class Portfolio():
                             if not symbol in self.accounts[account_number]['holdings']:
                                 self.accounts[account_number]['holdings'][symbol] = {
                                     'name': symbols[symbol],
-                                    'transactions': None,
+                                    'transactions': [],
                                     'statements': set(),
-                                    'last_quantity': 0, 'current_quantity': 0, 'last_total_cost': None, 'current_total_cost': None}
-                            
+                                    'quantity_total': None,
+                                    'cost_total': None
+                                }
                             symbol_data = self.accounts[account_number]['holdings'][symbol]
 
                             symbol_data['statements'].add('%s: %s' % (broker_name, statement['statement']))
                             
-                            symbol_data['current_quantity'] = 0
                             if 'quantity' in security_data:
-                                symbol_data['current_quantity'] = security_data['quantity']
-                            else:
-                                symbol_data['current_quantity'] = 0
+                                symbol_data['quantity_total'] = security_data['quantity']
                             
-                            symbol_data['total_cost'] = None
                             if 'total_cost' in security_data:
-                                symbol_data['current_total_cost'] = security_data['total_cost']
-                            else:
-                                symbol_data['current_total_cost'] = None
-                            
-                            # print(statement['statement'])
+                                symbol_data['cost_total'] = security_data['total_cost']
+
                             self.__add_transactions(security_data['transactions'], account_number, symbol, statement)
-                            
-                            symbol_data['last_quantity'] = symbol_data['current_quantity']
-                            symbol_data['last_total_cost'] = symbol_data['current_total_cost']
+
+        symbol_dates = {}
+        for account_number, account_data in self.accounts.items():
+            for symbol, symbol_data in account_data['holdings'].items():
+                # sort transactions by date and create full transactions dataframe
+                transactions = {}
+                for transaction in symbol_data['transactions']:
+                    transactions[transaction.index[-1]] = transaction
+                sorted_end_dates = sorted(transactions)
+                transactions_df = transactions[sorted_end_dates[0]]
+                if len(sorted_end_dates) > 1:
+                    for end_date in sorted_end_dates[1:]:
+                        transactions_df = pd.concat([transactions_df, transactions[end_date]])
                 
                 # make sure all columns are filled
-                for symbol, symbol_data in self.accounts[account_number]['holdings'].items():
-                    if not isinstance(symbol_data['transactions'], type(None)):
-                        for colum in ['quantity', 'amount', 'price', 'transaction_cost', 'quantity_total', 'cost_total']:
-                            if not colum in symbol_data['transactions'].columns:
-                                symbol_data['transactions'][colum] = np.nan
+                columns = ['type', 'quantity', 'amount', 'price', 'transaction_cost', 'quantity_total', 'cost_total']
+                for colum in columns:
+                    if not colum in transactions_df.columns:
+                        transactions_df[colum] = np.nan
+                
+                symbol_data['transactions'] = transactions_df[columns].copy()
+                
+                # add symbol dates
+                if not symbol in symbol_dates:
+                    symbol_dates[symbol] = {'start_date': account_data['start_date'], 'end_date': account_data['end_date']}
+                else:
+                    if transactions_df.index[0] < symbol_dates[symbol]['start_date']:
+                        symbol_dates[symbol]['start_date'] = transactions_df.index[0]
+                    if transactions_df.index[-1] > symbol_dates[symbol]['end_date']:
+                        symbol_dates[symbol]['end_date'] = transactions_df.index[-1]
 
-        storage.save(self.accounts, 'statement_accounts')
+        self.charts = {}
+        for symbol, symbol_dates in symbol_dates.items():
+            print('getting chart for %s' % symbol)
+            self.charts[symbol] = self.__get_chart(symbol, symbol_dates['start_date'], symbol_dates['end_date'])
+        storage.save(self.charts, 'database/portfolio_charts')
+
+        storage.save(self.accounts, 'database/portfolio_accounts')
 
     def __add_transactions(self, transactions, account_number, symbol, statement):
         holding = self.accounts[account_number]['holdings'][symbol]
@@ -791,9 +708,7 @@ class Portfolio():
             # fill all nan values with zeros
             transactions.loc[transactions['quantity'].isna(), 'quantity'] = 0.0
 
-            # sort by date
-            transactions = transactions.sort_values(by='transaction_date')
-
+            # get transactions based on quantity amount
             quantity_transactions = transactions[transactions['quantity'] != 0.0].copy()
             non_quantity_transactions = transactions[transactions['quantity'] == 0.0].copy()
 
@@ -828,66 +743,87 @@ class Portfolio():
                 new_transactions = quantity_transactions.copy()
                 if len(non_quantity_transactions) > 0:
                     new_transactions = pd.concat([new_transactions, non_quantity_transactions])
-            
+
+            # sort by date
+            new_transactions = new_transactions.sort_values(by='transaction_date')
+
             # add totals
             new_transactions['quantity_total'] = np.nan
             new_transactions['cost_total'] = np.nan
             totals = {'transaction_date': statement['end_date'], 'type': 'totals', 'quantity_total': np.nan, 'cost_total': np.nan}
-            if holding['current_quantity'] != None and holding['current_quantity'] > 0:
-                totals['quantity_total'] = holding['current_quantity']
-            if holding['current_total_cost'] != None:
-                totals['cost_total'] = holding['current_total_cost']
+            if holding['quantity_total'] != None and holding['quantity_total'] > 0:
+                totals['quantity_total'] = holding['quantity_total']
+            if holding['cost_total'] != None:
+                totals['cost_total'] = holding['cost_total']
             new_transactions = new_transactions._append(totals, ignore_index=True)
 
-            # sort by date and make it the index
-            new_transactions = new_transactions.sort_values(by='transaction_date')
+            # make date  the index
             new_transactions.set_index('transaction_date', inplace=True)
 
-            # concat to existing transactions
-            if isinstance(holding['transactions'], type(None)):
-                holding['transactions'] = new_transactions.dropna(axis=1, how='all').copy()
-            else:
-                holding['transactions'] = pd.concat([holding['transactions'].dropna(axis=1, how='all'), new_transactions.dropna(axis=1, how='all')])
+            # add to holding
+            holding['transactions'].append(new_transactions.dropna(axis=1, how='all').copy())
         else:
             pass
             # still add totals
-            # totals = {'transaction_date': statement['end_date'], 'type': 'totals', 'quantity_total': np.nan, 'cost_total': np.nan}
             totals = {'type': 'totals', 'quantity_total': np.nan, 'cost_total': np.nan}
-            if holding['current_quantity'] != None and holding['current_quantity'] > 0:
-                totals['quantity_total'] = holding['current_quantity']
-            if holding['current_total_cost'] != None:
-                totals['cost_total'] = holding['current_total_cost']
+            if holding['quantity_total'] != None and holding['quantity_total'] > 0:
+                totals['quantity_total'] = holding['quantity_total']
+            if holding['cost_total'] != None:
+                totals['cost_total'] = holding['cost_total']
             totals = pd.DataFrame({statement['end_date']: totals}).T
             totals['quantity_total'] = totals['quantity_total'].astype('float64')
             totals['cost_total'] = totals['cost_total'].astype('float64')
-            if isinstance(holding['transactions'], type(None)):
-                holding['transactions'] = totals.dropna(axis=1, how='all').copy()
-            else:
-                holding['transactions'] = pd.concat([holding['transactions'].dropna(axis=1, how='all'), totals.dropna(axis=1, how='all')])
-    
-    def __get_statements(self):
-        self.statement_accounts = storage.load('statement_accounts')
+
+            # add to holding
+            holding['transactions'].append(totals.dropna(axis=1, how='all').copy())
 
     def __parse_statements(self):
         # get statements
-        # TODO organize statement pdf collection
-        pdf_files = []
-        # pdf_files = glob.glob('test_statements/*.pdf')
-        # pdf_files = glob.glob('database/statements/*.pdf')
-        
-        pdf_files += glob.glob('database/statements_ms/*.pdf')
-        pdf_files += glob.glob('database/statements_fi/*.pdf')
-        pdf_files += glob.glob('database/statements_st/*.pdf')
-        pdf_files += glob.glob('database/statements_ml/*.pdf')
-        
-        # pdf_files = ['database/statements_ms\\RO_2023_09.pdf']
+        if not self.update:
+            self.statement_accounts = storage.load('database/portfolio_statement_accounts')
+            return
 
-        # print('pdf files: %d' % len(pdf_files))
-        citi = [
-            'Citigroup Global Markets',
-            'Account carried by Citigroup Global Markets',
-        ]
+        pdf_files = []
         
+        # pdf_files += glob.glob('database/statements_ms/*.pdf')
+        # pdf_files += glob.glob('database/statements_fi/*.pdf')
+        # pdf_files += glob.glob('database/statements_st/*.pdf')
+        # pdf_files += glob.glob('database/statements_ml/*.pdf')
+
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/ETRADE/Etrade_Trust/20*/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/ETRADE/Etrade_2261_Joint_CLOSED/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/ETRADE/Etrade_Trust/*.pdf')
+
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/ETRADE/Etrade_AmyRoth/20*/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/ETRADE/Etrade_AmyRoth/*.pdf')
+
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/ETRADE/Etrade_FrankRollover/20*/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/ETRADE/Etrade_FrankRollover/*.pdf')
+
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/ETRADE/Etrade_AmyRollover/*.pdf')
+
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/MORGAN STANLEY/STATEMENTS/*.pdf')
+
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/FIDELITY/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/FIDELITY/AMY/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/FIDELITY/EMILY/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/FIDELITY/EMILY/20*/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/FIDELITY/FRANK/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/FIDELITY/FRANK/20*/*.pdf')
+
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/SCOTTRADE/Joint_209-64911_CLOSED/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/SCOTTRADE/AmyRothIRA_ 209-41121_CLOSED/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/SCOTTRADE/AmyRothIRA_ 209-41121_CLOSED/20*/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/SCOTTRADE/AmyRolloverIRA_209-60513_CLOSED/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/SCOTTRADE/AmyIRA_209-39991/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/SCOTTRADE/AmyIRA_209-39991/20*/*.pdf')
+
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/MERRILL/STATEMENTS/*.pdf')
+
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/SMITH BARNEY/Account No. 814-109380-296/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/SMITH BARNEY/Account No. 156-109380-510/*.pdf')
+        pdf_files += glob.glob('Z:/AALBERS-CHEN ASSETS/SMITH BARNEY/MSSB ACCOUNT NO. 240-26077-13/*.pdf')
+
         company_statements = []
         for pdf_file in pdf_files:
             statement = Statement(pdf_file)
@@ -941,9 +877,7 @@ class Portfolio():
 
             else:
                 company_statements.append(company_statement)
-
-        
-        print('statements: %d' % len(company_statements))
+                print('parsed # %s: %s' % (len(company_statements), company_statement.statement.pdf_file))
 
         self.statement_accounts = {}
         for company_statement in company_statements:
@@ -954,4 +888,4 @@ class Portfolio():
                     self.statement_accounts[company_statement.name][account_number] = []
                 self.statement_accounts[company_statement.name][account_number].append(account_data)
 
-        # storage.save(self.statement_accounts, 'statement_accounts')
+        storage.save(self.statement_accounts, 'database/portfolio_statement_accounts')
