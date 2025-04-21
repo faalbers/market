@@ -202,6 +202,29 @@ class Database():
         cursor.close()
 
     def table_read(self, table_name, key_values=[], column_values=[], max_column=None):
+        # There is a limit on SQL entries for key_values
+        key_values_limit = 30000
+        key_values = list(key_values)
+        if len(key_values) > key_values_limit:
+            # cut key_values into chunks and combine results
+            chunks = {}
+            limit_idx = key_values_limit
+            while limit_idx < (len(key_values)+1):
+                key_values_chunk = key_values[limit_idx-key_values_limit:limit_idx]
+                chunk = self.table_read_chunk(table_name, key_values_chunk, column_values, max_column)
+                chunks = {**chunks, **chunk}
+                limit_idx += key_values_limit
+            left_idx = len(key_values) % key_values_limit
+            if left_idx > 0:
+                key_values_chunk = key_values[-left_idx:]
+                chunk = self.table_read_chunk(table_name, key_values_chunk, column_values, max_column)
+                chunks = {**chunks, **chunk}
+            return chunks
+        else:
+            # do the whole thing
+            return self.table_read_chunk(table_name, key_values, column_values, max_column)
+    
+    def table_read_chunk(self, table_name, key_values=[], column_values=[], max_column=None):
         # get table info
         table_info = self.get_table_info(table_name)
         if not table_info: return {}
