@@ -91,12 +91,13 @@ class Catalog():
             'sets': {
                 'YahooF_Chart': {
                     'scrapes': {
-                        YahooF_Chart: {'tables': {'all': {},}},
-                        YahooF_Info: {'tables': {'all': {},}},
-                        Finviz_Ticker_News: {'tables': {'all': {},}},
-                        Polygon_News: {'tables': {'all': {},}},
-                        Fred: {'tables': {'all': {},}},
-                        File_Files: {'tables': {'all': {},}},
+                        # YahooF_Chart: {'tables': {'all': {},}},
+                        # YahooF_Info: {'tables': {'all': {},}},
+                        # Finviz_Ticker_News: {'tables': {'all': {},}},
+                        # Polygon_News: {'tables': {'all': {},}},
+                        # Fred: {'tables': {'all': {},}},
+                        # File_Files: {'tables': {'all': {},}},
+                        Etrade_Quote: {'tables': {'all': {},}},
                     },
                 },
             },
