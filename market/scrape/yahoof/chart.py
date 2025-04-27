@@ -1,9 +1,12 @@
 from .yahoof import YahooF
-import logging, time
+import logging, time, os
 from ...database import Database
+from ...utils import storage
 from pprint import pp
 import yfinance as yf
 from datetime import datetime
+from multiprocessing import Pool
+import pandas as pd
 
 class YahooF_Chart(YahooF):
     dbName = 'yahoof_chart'
@@ -32,26 +35,11 @@ class YahooF_Chart(YahooF):
             return ([True, data, 'ok'])
         return [True, proc_chart, data]
 
-    def get_chart_old(self, symbol):
-        while True:
-            try:
-                ticker = yf.Ticker(symbol)
-                chart = ticker.history(period="10y",auto_adjust=False)
-            except Exception as e:
-                if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
-                    self.logger.info('YahooF:  Rate Limeit: wait 60 seconds')
-                    time.sleep(60)
-                    continue
-                else:
-                    return ([False, None, e])
-            if chart.shape[0] == 0:
-                return ([False, None, 'empty'])
-            return ([True, chart, 'ok'])
-
     def __init__(self, key_values=[], table_names=[]):
+        self.db = Database(self.dbName)
+        if len(key_values) == 0: return
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
-        self.db = Database(self.dbName)
 
         # make yfinance log into a file
         yflogger = logging.getLogger('yfinance')
@@ -84,10 +72,10 @@ class YahooF_Chart(YahooF):
     def update_check(self, symbols):
         db_status = self.db.table_read('status_db')
         
-        # found is 24 h check
-        found_update = int(datetime.now().timestamp()) - 86400
+        # found is 1 days check
+        found_update = int(datetime.now().timestamp()) - (3600 * 24 * 1)
         # not found is 1/2 year check
-        not_found_update = int(datetime.now().timestamp()) - (86400 * 182)
+        not_found_update = int(datetime.now().timestamp()) - (3600 * 24 * 182)
 
         update_symbols = []
         for symbol in symbols:
@@ -134,3 +122,73 @@ class YahooF_Chart(YahooF):
         
         # write table reference
         self.db.table_write('table_reference', {symbol: {'chart': table_name}}, 'symbol', method='append')
+
+    @staticmethod
+    # def reference_chunk(data):
+    def reference_chunk(data):
+        symbols = data[0]
+        db_name = data[1]
+        db = Database(db_name)
+
+        charts = {}
+        for symbol, symbol_chart_table in symbols.items():
+            chart = db.table_read(symbol_chart_table)
+            df = pd.DataFrame(chart).T
+            df.index = pd.to_datetime(df.index, unit='s')
+            df.sort_index(inplace=True)
+            df.index = df.index.floor('D') # set it to beginning of day
+            df = df.drop('timestamp', axis=1)
+            charts[symbol] = df
+        return charts
+    
+    def cache_data(self, symbols):
+        # check if cache needs to be updated
+        update_db_date = os.path.getmtime('database/%s.db' % self.dbName)
+        db_storage = 'database/%s' % self.dbName
+        pickle_db_file = '%s.pickle' % db_storage
+        if os.path.exists(pickle_db_file):
+            pickle_db_date = os.path.getmtime(pickle_db_file)
+            if pickle_db_date >= update_db_date: return
+
+        logger = logging.getLogger('Market')
+        logger.info('YahooF:  Chart: update cache')
+
+        charts = storage.load(db_storage)
+        if charts == None: charts = {}
+
+        # get table references
+        table_reference = self.db.table_read('table_reference')
+        chart_symbols = set(table_reference.keys())
+        if len(charts) > 0:
+            chart_symbols = chart_symbols.intersection(set(symbols))
+        chart_symbols = sorted(chart_symbols)
+        
+        # gather symbol chunks based on cpu count
+        cpus = 8
+        symbols_limit = int(len(chart_symbols)/cpus)
+        if len(chart_symbols) % cpus > 0: symbols_limit += 1
+        symbol_chunks = []
+        limit_idx = symbols_limit
+        while limit_idx < (len(chart_symbols)+1):
+            symbol_chunk = chart_symbols[limit_idx-symbols_limit:limit_idx]
+            dict_chunk = {symbol: table_reference[symbol]['chart'] for symbol in symbol_chunk}
+            symbol_chunks.append((dict_chunk, self.dbName))
+            limit_idx += symbols_limit
+        left_idx = len(chart_symbols) % symbols_limit
+        if left_idx > 0:
+            symbol_chunk = chart_symbols[-left_idx:]
+            dict_chunk = {symbol: table_reference[symbol]['chart'] for symbol in symbol_chunk}
+            symbol_chunks.append((dict_chunk, self.dbName))
+
+        with Pool(processes=cpus) as pool:
+            results = pool.map(YahooF_Chart.reference_chunk, symbol_chunks)
+            for result in results:
+                charts.update(result)
+
+        # backup and write to storage
+        logger.info('YahooF:  Chart: backup cache ...')
+        storage.backup(db_storage)
+        logger.info('YahooF:  Chart: saving cache of %s symbols ...' % len(chart_symbols))
+        storage.save(charts, db_storage)
+        logger.info('YahooF:  Chart: saving cache done')
+
