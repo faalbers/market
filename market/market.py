@@ -120,8 +120,8 @@ class Market():
     def get_quicken(self, qif_file):
         return Quicken(qif_file)
 
-    def get_analysis(self, tickers):
-        return Analysis(tickers)
+    def get_analysis(self, tickers=None, recache=False):
+        return Analysis(tickers, recache=recache)
 
     def update_nightly(self, tickers=None):
         if not tickers or tickers.count == 0:
