@@ -1,11 +1,12 @@
 from ..vault import Vault
+from ..scrape import YahooF_Chart
 from ..viz import Viz
 from ..database import Database
-from ..utils import stop_text
+from ..utils import stop_text, storage
 import pandas as pd
 from pprint import pp
 from datetime import datetime
-import logging
+import logging, os
 from langchain_ollama import OllamaLLM
 
 class Tickers():
@@ -41,6 +42,26 @@ class Tickers():
         return self.vault.get_data(['price'], self.symbols, update=update)['price']
 
     def get_chart(self, start_date=None, end_date=None, update=False):
+        # we cache if more the 65
+        if len(self.symbols) > 65:
+            if update: self.update(['chart'])
+            
+            storage_name = 'database/%s' % YahooF_Chart.dbName
+            chart_cached = storage.load(storage_name)
+
+            chart = {}
+            for symbol in self.symbols:
+                if not symbol in chart_cached: continue
+                df = chart_cached[symbol]
+                if start_date:
+                    df = df.loc[start_date:]
+                if end_date:
+                    df = df.loc[:end_date]
+                chart[symbol] = df
+
+            return chart
+
+        # we get from vault if 65 or less
         chart_data = self.vault.get_data(['chart'], self.symbols, update=update)['chart']
         if 'chart' in chart_data:
             chart_data = chart_data['chart']
