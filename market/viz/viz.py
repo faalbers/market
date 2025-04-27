@@ -19,6 +19,7 @@ class Viz():
         with open('%s.txt' % file_name, 'w', encoding='utf-8') as f:
             pp(data, f)
     
+    # TODO hide this with '__'
     @staticmethod
     def data_keys_text_recursive(data, data_keys, rename_set, rename_to):
         if isinstance(data, dict):

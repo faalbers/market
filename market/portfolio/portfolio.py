@@ -177,6 +177,7 @@ class Portfolio():
 
             r.buildDoc()
 
+    # TODO make hidden with'__'
     def handle_transactions_viz(self, transactions_viz, info):
         # add close to dates
         chart = None
@@ -333,6 +334,7 @@ class Portfolio():
 
         return (cumulatives, actions)
 
+    # TODO make hidden with'__'
     def make_report_t_bill(self, transactions, info, report_data):
         # United States Treasury Bill
         report_data['type'] = 'us treasury bill'
@@ -363,24 +365,28 @@ class Portfolio():
         table = pd.DataFrame([ table ])
         report_data['tables'].append(table)
     
+    # TODO make hidden with'__'
     def make_report_nh(self, transactions, info, report_data):
         # 529 College Investing Plan
         report_data['type'] = '529'
         # self.test.update(transactions['type'].unique())
         pass
 
+    # TODO make hidden with'__'
     def make_report_mm(self, transactions, info, report_data):
         # Money Market Fund
         report_data['type'] = 'money market fund'
         # self.test.update(transactions['type'].unique())
         pass
 
+    # TODO make hidden with'__'
     def make_report_mf(self, transactions, info, report_data):
         # Mutual Fund
         report_data['type'] = 'mutual fund'
 
         self.make_report_equity(transactions, info, report_data)
 
+    # TODO make hidden with'__'
     def make_report_equity(self, transactions, info, report_data):
         # do_a = info['account_number'] == '20960513' and info['symbol'] == 'RYBHX'
         do_a = info['symbol'] == 'RYBHX'
@@ -506,12 +512,14 @@ class Portfolio():
             plt.close(fig)
             report_data['graphs_2'].append(graph)
 
+    # TODO make hidden with'__'
     def make_report_dsp(self, transactions, info, report_data):
         # FDIC-insured Deposit Sweep Program core position
         report_data['type'] = 'deposit sweep program'
         # self.test.update(transactions['type'].unique())
         pass
     
+    # TODO make hidden with'__'
     def make_report_stock(self, transactions, info, report_data):
         # Stock
         report_data['type'] = 'stock'

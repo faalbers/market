@@ -14,6 +14,7 @@ class Catalog():
             return self.catalog[catalog_name]
         return {}
 
+    # TODO hide this with '__'
     @staticmethod
     def merge(self, data, db=None, allow_collision=False):
         if len(data) == 0: return data
@@ -43,6 +44,7 @@ class Catalog():
 
         return data
     
+    # TODO hide this with '__'
     @staticmethod
     def reference_multi(params):
         key_table_reference = params[0]
@@ -53,6 +55,7 @@ class Catalog():
             data[key_value] = db.table_read(table_name)
         return data
 
+    # TODO hide this with '__'
     @staticmethod
     def reference(self, data, db, timestamps_table=None):
         # get referenced tables for key value
@@ -79,12 +82,6 @@ class Catalog():
                 new_data[reference_name] = reference_data
         return new_data
     
-    @staticmethod
-    def test_proc(self, data, db=None):
-        print(db)
-        pp(data.keys())
-        return data
-
     catalog = {
         'update': {
             'info': 'update info and chart',

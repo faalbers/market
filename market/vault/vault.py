@@ -75,15 +75,18 @@ class Vault():
         recurse_catalog(self.catalog.get_catalog(catalog), params)
         return sorted(params)
 
+    # TODO hide with '__'
     def get_scrape_database(self, scrape_class):
         if not scrape_class in self.databases:
             self.databases[scrape_class] = Database(scrape_class.dbName)
         return self.databases[scrape_class]
 
+    # TODO hide with '__'
     def close_scrape_database(self, scrape_class):
         if scrape_class in self.databases:
             self.databases.pop(scrape_class)
 
+    # TODO hide with '__'
     def close_all_scrape_databases(self):
         scrape_classes = list(self.databases.keys())
         for scrape_class in scrape_classes:

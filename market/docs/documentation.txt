@@ -1,0 +1,206 @@
+Overview:
+
+Market: market
+    get_tickers
+    get_us_market_tickers
+    get_scraped_tickers
+    get_portfolio
+    get_analysis
+    make_data_report
+    
+    get_quicken
+    update_nightly
+    update_nightly_us_market
+    make_porfolios_report
+
+Catalog: market.vault (only accessable by Vault)
+    get_catalog
+    merge
+    reference_multi
+    reference
+    catalog (dict)
+
+Tickers: market.Tickers
+    add_symbol
+    add_symbols
+    get_symbols
+    get_profiles
+    get_analysis
+    get_prices
+    get_chart
+    get_all
+    update
+    make_data_report
+    get_news
+    get_news_sentiment
+    update_news_sentiment
+    
+    get_revenue_growth
+
+Database: market.Database
+    close
+    get_connection
+    get_cursor
+    commit
+    backup
+    table_write_df
+    table_write
+    table_read
+    table_read_chunk
+    get_table_info
+    table_exists
+    get_table_names
+    get_table_column_names
+    table_drop
+    vacuum
+
+storage: marget.utils
+    save
+    load
+    backup
+
+stop: marget.utils
+    stop_text
+
+Portfolio: market.porfolio
+    make_reports
+    handle_transactions_viz
+    make_report_t_bill
+    make_report_nh
+    make_report_mm
+    make_report_mf
+    make_report_equity
+    make_report_dsp
+    make_report_stock
+
+All below only used with Portfolio:
+    Statement: market.portfolio.statement
+        get_page_blocks
+        get_page_lines
+        get_blocks
+        get_lines
+        get_tables
+
+    Morgan_Stanley: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+    Morgan_Stanley_SB: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+    Etrade: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+    Fidelity: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+    Fidelity_V2: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+    Scottrade: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+    Scottrade_V2: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+    Merrill_Lynch: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+    Merrill_Lynch_V2: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+    Citi: market.portfolio.statement
+        statement (statement path string)
+        accounts (accounts data dictionary)
+
+Analysis: market.analysis
+    test
+    sector_industry
+    get_params
+    get_values
+    find
+
+Report: market.report
+    colors
+    printStyles
+    printColors
+    getStyle
+    addParagraph
+    addTable
+    addSpace
+    addChartFigure
+    plotLineDF
+    plotBarsDF
+    plotBarsLineDF
+    addPageBreak
+    buildDoc
+
+Quicken: market.quicken
+    Qif: only used by Quicken
+    get_investment_accounts
+    get_securities
+
+Viz: market.viz
+    plot_timeseries
+    data_text
+    data_keys_text_recursive
+    data_keys_text
+
+Vault: market.vault
+    update
+    get_catalog_params
+    get_scrape_database
+    close_scrape_database
+    close_all_scrape_databases
+    get_data
+
+Scrapers used by Vault:
+    YahooF: market.scrape (base)
+    YahooF_Chart: market.scrape
+        dbName (database name string)
+        get_table_names
+    YahooF_Info: market.scrape
+        dbName (database name string)
+        get_table_names
+
+    FMP: market.scrape (base)
+    FMP_Stocklist: market.scrape
+
+    Polygon: market.scrape
+    Polygon_Tickers: market.scrape
+        dbName (database name string)
+        get_table_names
+    Polygon_News: market.scrape
+        dbName (database name string)
+        get_table_names
+
+    Finviz: market.scrape (base)
+    Finviz_Ticker_News: market.scrape
+        dbName (database name string)
+        get_table_names
+
+    Etrade: market.scrape (base)
+    Etrade_Quote: market.scrape
+        dbName (database name string)
+        get_table_names
+
+    File: market.scrape (base)
+    File_Files: market.scrape
+        dbName (database name string)
+        get_table_names
+
+    Fred: market.scrape
+        dbName (database name string)
+        get_table_names
+
+    Yahoo only kept for reference, but not used anymore:
+    Yahoo: market.scrape (base)
+    Yahoo_Quote: market.scrape
+        dbName (database name string)
+        get_table_names
+    Yahoo_Chart: market.scrape
+        dbName (database name string)
+        get_table_names
+    Yahoo_Timeseries market.scrape
+        dbName (database name string)
+        get_table_names
+

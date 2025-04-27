@@ -234,7 +234,8 @@ class Database():
         else:
             # do the whole thing
             return self.table_read_chunk(table_name, key_values, column_values, max_column)
-    
+
+    # TODO hide this with '__'    
     def table_read_chunk(self, table_name, key_values=[], column_values=[], max_column=None):
         # get table info
         table_info = self.get_table_info(table_name)

@@ -116,12 +116,17 @@ class Market():
 
     def get_portfolio(self, update=False):
         return Portfolio(update)
-    
-    def get_quicken(self, qif_file):
-        return Quicken(qif_file)
 
     def get_analysis(self, tickers=None, recache=False):
         return Analysis(tickers, recache=recache)
+
+    def make_data_report(self):
+        tickers = self.get_scraped_tickers()
+        tickers.make_data_report()
+
+    # TODO these need to be checked
+    def get_quicken(self, qif_file):
+        return Quicken(qif_file)
 
     def update_nightly(self, tickers=None):
         if not tickers or tickers.count == 0:
@@ -142,6 +147,3 @@ class Market():
             portfolio.add_report(report)
             report.buildDoc()
     
-    def make_data_report(self):
-        tickers = self.get_scraped_tickers()
-        tickers.make_data_report()

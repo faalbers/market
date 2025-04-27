@@ -85,6 +85,13 @@ class Tickers():
     def get_all(self):
         return self.vault.get_data(['all'], self.symbols)['all']
 
+    def update(self, catalogs):
+        self.vault.update(catalogs, sorted(self.symbols))
+
+    def make_data_report(self):
+        all_data = self.get_all()
+        self.viz.data_keys_text(all_data, rename_set=set(self.get_symbols()), rename_to='symbol')
+
     def get_news(self, start_date=None, end_date=None, update=False):
         # update if needed 
         if update:
@@ -212,11 +219,4 @@ class Tickers():
     def get_revenue_growth(self):
         return self.vault.get_data(['revenue_growth'], self.symbols)['revenue_growth']
     
-    def update(self, catalogs):
-        self.vault.update(catalogs, sorted(self.symbols))
-
-    def make_data_report(self):
-        all_data = self.get_all()
-        self.viz.data_keys_text(all_data, rename_set=set(self.get_symbols()), rename_to='symbol')
-
     # TODO: add __str__

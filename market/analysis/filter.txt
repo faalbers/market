@@ -1,0 +1,36 @@
+Filter:
+
+Filter word characters:
+- '=', '<', '>'
+
+Parameter:
+example:
+['fund_data', 'fund_overview', 'categoryName']
+
+Sorting order:
+sort_function: 'ascend', 'descend'
+[
+    [['dividend yield'], sort_function],
+]
+
+Sorted entries:
+example
+[
+    [['fund_data', 'fund_overview', 'categoryName'],'=', 'Technology'],
+    [['dividend_yield'] , '>' , 0.1],
+]
+
+Sorting order:
+sort_function: 'ascend', 'descend'
+[
+    [['dividend yield'], sort_function],
+]
+
+settings example:
+{
+    'filter': [
+        [['fund_data', 'fund_overview', 'categoryName'],'=', 'Technology'],
+        [['dividend_yield'] , '>' , 0.0],
+    ],
+}
+
