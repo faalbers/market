@@ -47,7 +47,7 @@ class Database():
         filename ='database/%s.db' % self.name
         filename_backup ='database/backup/%s_01.db' % self.name
         
-        backup_files = glob.glob('database/backup/%s_*' % self.name)
+        backup_files = glob.glob('database/backup/%s_*.db' % self.name)
         backup_files = [os.path.normpath(filename).replace('\\', '/') for filename in backup_files]
         backup_files.sort(reverse=True)
         
@@ -77,7 +77,18 @@ class Database():
         dtypes = df.dtypes
         dtypes[df.index.name] = df.index.dtype
         dtypes = dtypes.to_frame('types')
-        dtypes['sql'] = dtypes['types'].apply(lambda x: self.sql_data_typesPD[x.type])
+        try:
+            dtypes['sql'] = dtypes['types'].apply(lambda x: self.sql_data_typesPD[x.type])
+        except:
+            # TODO this problem accures rarely. I don't know how to solveit yet
+            print('crapped out here')
+            print('df')
+            print(df)
+            print("dtypes['types']")
+            print(dtypes['types'])
+            print('self.sql_data_typesPD')
+            pp(self.sql_data_typesPD)
+            raise ValueError('Da Lambda crapped out')
         dtypes = dtypes['sql'].to_dict()
         dtypes[df.index.name] += ' PRIMARY KEY'
 
@@ -355,3 +366,10 @@ class Database():
         cursor = self.connection.cursor()
         cursor.execute("DROP TABLE IF EXISTS '%s'" % table_name)
         cursor.close()
+
+    def vacuum(self):
+        self.backup()
+        cursor = self.connection.cursor()
+        cursor.execute("VACUUM")
+        cursor.close()
+        
