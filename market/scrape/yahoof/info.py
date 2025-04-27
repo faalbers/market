@@ -230,8 +230,8 @@ class YahooF_Info(YahooF):
     def update_check(self, symbols):
         db_status = self.db.table_read('status_db')
         
-        # found is 24 h check
-        found_update = int(datetime.now().timestamp()) - (3600 * 24)
+        # found is 1 days check
+        found_update = int(datetime.now().timestamp()) - (3600 * 24 * 1)
         # not found is 1/2 year check
         not_found_update = int(datetime.now().timestamp()) - (3600 * 24 * 182)
 
