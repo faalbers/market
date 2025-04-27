@@ -1,9 +1,11 @@
 from .catalog import Catalog
 from ..scrape import *
 from ..database import Database
+from ..utils import stop_text
 from pprint import pp
 import multiprocessing
-import logging
+import logging, os
+from datetime import datetime
 
 class Vault():
     def __init__(self):
@@ -35,7 +37,7 @@ class Vault():
         multi_chunks = []
         log_queue = self.logger.handlers[0].queue
         for sub_class, scraper_classes in scraper_classes_data.items():
-            # creat multi cunk per sub_class
+            # creat multi chunk per sub_class
             update_scrapers = {}
             for scraper_class, table_names in scraper_classes:
                 if not scraper_class in update_scrapers:
@@ -48,7 +50,6 @@ class Vault():
         # run scrapes in multi thread
         if len(multi_chunks) == 0: return
         self.logger.info('Run scrapes in %s threads' % (len(multi_chunks)))
-        log_queue = self.logger.handlers[0].queue
         processes = []
         for chunk in multi_chunks:
             p = multiprocessing.Process(target=Vault.update_scrapers, args=chunk)
@@ -57,6 +58,22 @@ class Vault():
         for p in processes:
             p.join()
         self.logger.info('Scraping threads completed')
+
+        # cache chart
+        if stop_text(): return
+        YahooF_Chart().cache_data(key_values)
+
+    def get_catalog_params(self, catalog):
+        def recurse_catalog(data, params):
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    if key == 'column_settings':
+                        for names in value:
+                            params.append(names[1])
+                    recurse_catalog(value, params)
+        params = []
+        recurse_catalog(self.catalog.get_catalog(catalog), params)
+        return sorted(params)
 
     def get_scrape_database(self, scrape_class):
         if not scrape_class in self.databases:
