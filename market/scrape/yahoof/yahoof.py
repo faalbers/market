@@ -4,7 +4,7 @@ import yfinance as yf
 
 class YahooF():
     @sleep_and_retry
-    @limits(calls=67, period=60) # 4020/hour
+    @limits(calls=100, period=60) # 6000/hour
     def exec_proc(self, proc, arguments):
         return proc(**arguments)
     
