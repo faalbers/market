@@ -35,7 +35,7 @@ class YahooF_Chart(YahooF):
             return ([True, data, 'ok'])
         return [True, proc_chart, data]
 
-    def __init__(self, key_values=[], table_names=[]):
+    def __init__(self, key_values=[], table_names=[], forced=False):
         self.db = Database(self.dbName)
         if len(key_values) == 0: return
         self.logger = logging.getLogger('vault_multi')
@@ -53,9 +53,14 @@ class YahooF_Chart(YahooF):
         yflogger.addHandler(file_handler)
         
         # check what symbols need to be updated
-        symbols = self.update_check(key_values)
-        # symbols = key_values
+        if forced:
+            symbols = sorted(key_values)
+        else:
+            symbols = self.update_check(key_values)
         if len(symbols) == 0: return
+
+        # leave if yfinance limit rate
+        if not self.yfinance_ok(): return
 
         self.logger.info('YahooF:  Chart: update')
         self.logger.info('YahooF:  Chart: symbols processing : %s' % len(symbols))
@@ -142,27 +147,27 @@ class YahooF_Chart(YahooF):
         return charts
     
     def cache_data(self, symbols):
-        # check if cache needs to be updated
-        update_db_date = os.path.getmtime('database/%s.db' % self.dbName)
+        # get cache info
         db_storage = 'database/%s' % self.dbName
-        pickle_db_file = '%s.pickle' % db_storage
-        if os.path.exists(pickle_db_file):
-            pickle_db_date = os.path.getmtime(pickle_db_file)
-            if pickle_db_date >= update_db_date: return
-
-        logger = logging.getLogger('Market')
-        logger.info('YahooF:  Chart: update cache')
-
-        charts = storage.load(db_storage)
-        if charts == None: charts = {}
-
-        # get table references
-        table_reference = self.db.table_read('table_reference')
-        chart_symbols = set(table_reference.keys())
-        if len(charts) > 0:
-            chart_symbols = chart_symbols.intersection(set(symbols))
-        chart_symbols = sorted(chart_symbols)
+        db_storage_timestamp = storage.timestamp(db_storage)
+        charts = {}
+        if db_storage_timestamp != None:
+            charts = storage.load(db_storage)
         
+        # get get chart symbols that need updated
+        table_reference = pd.DataFrame(self.db.table_read('table_reference')).T
+        if len(charts) > 0:
+            status_db = pd.DataFrame(self.db.table_read('status_db')).T
+            status_db = status_db.loc[table_reference.index]
+            status_db = status_db[(status_db['found'] == 1) & (status_db['timestamp'] > db_storage_timestamp)]
+            chart_symbols = sorted(status_db.index)
+        else:
+            chart_symbols = sorted(table_reference.index)
+        if len(chart_symbols) == 0: return
+        
+        logger = logging.getLogger('Market')
+        logger.info('YahooF:  Chart: update cache for %s symbols. can not be interrupted with stop text !' % len(chart_symbols))
+
         # gather symbol chunks based on cpu count
         cpus = 8
         symbols_limit = int(len(chart_symbols)/cpus)
@@ -171,13 +176,13 @@ class YahooF_Chart(YahooF):
         limit_idx = symbols_limit
         while limit_idx < (len(chart_symbols)+1):
             symbol_chunk = chart_symbols[limit_idx-symbols_limit:limit_idx]
-            dict_chunk = {symbol: table_reference[symbol]['chart'] for symbol in symbol_chunk}
+            dict_chunk = {symbol: table_reference.loc[symbol, 'chart'] for symbol in symbol_chunk}
             symbol_chunks.append((dict_chunk, self.dbName))
             limit_idx += symbols_limit
         left_idx = len(chart_symbols) % symbols_limit
         if left_idx > 0:
             symbol_chunk = chart_symbols[-left_idx:]
-            dict_chunk = {symbol: table_reference[symbol]['chart'] for symbol in symbol_chunk}
+            dict_chunk = {symbol: table_reference.loc[symbol, 'chart'] for symbol in symbol_chunk}
             symbol_chunks.append((dict_chunk, self.dbName))
 
         with Pool(processes=cpus) as pool:
@@ -188,7 +193,6 @@ class YahooF_Chart(YahooF):
         # backup and write to storage
         logger.info('YahooF:  Chart: backup cache ...')
         storage.backup(db_storage)
-        logger.info('YahooF:  Chart: saving cache of %s symbols ...' % len(chart_symbols))
+        logger.info('YahooF:  Chart: saving updated cache ...')
         storage.save(charts, db_storage)
         logger.info('YahooF:  Chart: saving cache done')
-
