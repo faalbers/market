@@ -2,6 +2,7 @@ import sqlite3, json, os, glob, shutil, logging
 import numpy as np
 from pprint import pp
 from datetime import datetime
+import pandas as pd
 
 class Database():
     sql_data_types = {
@@ -25,6 +26,8 @@ class Database():
     def __init__(self, name):
         self.name = name
         self.connection = sqlite3.connect('database/%s.db' % self.name)
+        # initialize first execute so we can start timing later
+        self.get_table_names()
 
     def __del__(self):
         self.connection.commit()
@@ -47,7 +50,7 @@ class Database():
         filename ='database/%s.db' % self.name
         filename_backup ='database/backup/%s_01.db' % self.name
         
-        backup_files = glob.glob('database/backup/%s_*.db' % self.name)
+        backup_files = glob.glob('database/backup/%s_0*.db' % self.name)
         backup_files = [os.path.normpath(filename).replace('\\', '/') for filename in backup_files]
         backup_files.sort(reverse=True)
         
@@ -72,7 +75,28 @@ class Database():
         except FileNotFoundError:
             pass
 
+    def table_read_df(self, table_name, index_column=None):
+        try:
+            df = pd.read_sql_query('SELECT * FROM %s' % table_name, self.connection)
+        except:
+            return pd.DataFrame()
+        if index_column:
+            df.set_index(index_column, inplace=True)
+        return df
+    
+    def table_read_timeseries(self, table_name):
+        df = self.table_read_df(table_name, index_column='timestamp')
+        if df.empty: return df
+        df.index = pd.to_datetime(df.index, unit='s')
+        df.index.name = 'date'
+        return df
+    
     def table_write_df(self, table_name, df):
+        if df.empty: return
+        dtypes = {df.index.name: self.sql_data_typesPD[df.index.dtype.type] + ' PRIMARY KEY'}
+        df.to_sql(table_name, self.connection, if_exists='replace', index=True, dtype=dtypes)
+
+    def table_write_df_old(self, table_name, df):
         # create dtypes
         dtypes = df.dtypes
         dtypes[df.index.name] = df.index.dtype
@@ -119,7 +143,8 @@ class Database():
 
         cursor = self.connection.cursor()
         # only create table if not exist, add primary key column
-        cursor.execute("CREATE TABLE IF NOT EXISTS %s  ([%s] %s PRIMARY KEY)" % (table_name, key_name, key_sql_data_type))
+        exec_string = "CREATE TABLE IF NOT EXISTS %s  ([%s] %s PRIMARY KEY)" % (table_name, key_name, key_sql_data_type)
+        cursor.execute(exec_string)
 
         # get table info
         table_info = self.get_table_info(table_name)
