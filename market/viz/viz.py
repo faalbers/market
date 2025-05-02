@@ -5,6 +5,13 @@ class Viz():
     def __init__(self):
         pass
 
+    def plot_dataframe(self, df, line=None):
+        df.plot()
+        # plt.ylim(-10, 10)
+        if not line is None:
+            plt.axhline(y=line, color='g', linestyle='--')
+        plt.show()
+        
     def plot_timeseries(self, data):
         fig, axs = plt.subplots(len(data), 1, figsize=(10, 10))
         axs_index = 0
