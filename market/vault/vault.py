@@ -14,16 +14,16 @@ class Vault():
         self.databases = {}
 
     @staticmethod
-    def update_scrapers(log_queue, update_scrapers, key_values):
+    def update_scrapers(log_queue, update_scrapers, key_values, forced):
         logger = logging.getLogger("vault_multi")
         logger.setLevel(logging.INFO)
         queue_handler = logging.handlers.QueueHandler(log_queue)  
         logger.addHandler(queue_handler)  
 
         for scraper_class, table_names in update_scrapers.items():
-            scraper_class(key_values, table_names=table_names)
+            scraper_class(key_values, table_names=table_names, forced=forced)
 
-    def update(self, catalogs=[], key_values=[]):
+    def update(self, catalogs=[], key_values=[], forced=False):
         # gather scrape classes
         scraper_classes_data = {Yahoo: [], YahooF: [], FMP: [], Polygon: [], File: [], Finviz: [], Fred: [], Etrade: []}
         for catalog in catalogs:
@@ -36,16 +36,18 @@ class Vault():
                                 scraper_class_data.append((scraper_class, list(scraper_data['tables'].keys())))
         multi_chunks = []
         log_queue = self.logger.handlers[0].queue
+        do_yahoof_chart = False
         for sub_class, scraper_classes in scraper_classes_data.items():
             # creat multi chunk per sub_class
             update_scrapers = {}
             for scraper_class, table_names in scraper_classes:
+                if scraper_class == YahooF_Chart: do_yahoof_chart = True
                 if not scraper_class in update_scrapers:
                     update_scrapers[scraper_class] = []
                 for table_name in table_names:
                     update_scrapers[scraper_class] += scraper_class.get_table_names(table_name)
             if len(update_scrapers) > 0:
-                multi_chunks.append((log_queue, update_scrapers, key_values))
+                multi_chunks.append((log_queue, update_scrapers, key_values, forced))
         
         # run scrapes in multi thread
         if len(multi_chunks) == 0: return
@@ -59,9 +61,11 @@ class Vault():
             p.join()
         self.logger.info('Scraping threads completed')
 
-        # cache chart
+        # if we manually stopped we dont want to cache
         if stop_text(): return
-        YahooF_Chart().cache_data(key_values)
+
+        # cache chart
+        if do_yahoof_chart: YahooF_Chart().cache_data(key_values)
 
     def get_catalog_params(self, catalog):
         def recurse_catalog(data, params):
@@ -92,10 +96,10 @@ class Vault():
         for scrape_class in scrape_classes:
             self.close_scrape_database(scrape_class)
 
-    def get_data(self, catalogs=[], key_values=[], update=False):
+    def get_data(self, catalogs=[], key_values=[], update=False, forced=False):
         # TODO: should we have it handle only one catalog instead of list also ?
         
-        if update : self.update(catalogs, key_values)
+        if update: self.update(catalogs, key_values, forced=forced)
 
         main_data = {}
         for catalog_name in catalogs:
