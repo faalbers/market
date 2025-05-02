@@ -14,7 +14,7 @@ class Etrade_Quote(Etrade):
             return ['quote']
         return [table_name]
 
-    def __init__(self, key_values=[], table_names=[]):
+    def __init__(self, key_values=[], table_names=[], forced=False):
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
         self.db = Database(self.dbName)
@@ -23,8 +23,10 @@ class Etrade_Quote(Etrade):
         #     self.logger.info('Etrade:  Quote: Session did no succeed')
 
         # check what symbols need to be updated
-        symbols = self.update_check(key_values)
-        # symbols = key_values
+        if forced:
+            symbols = sorted(key_values)
+        else:
+            symbols = self.update_check(key_values)
         
         if len(symbols) == 0: return
         self.init_session()
@@ -43,7 +45,7 @@ class Etrade_Quote(Etrade):
             block_start = block_idx*block_size
             block_end = block_start+block_size
             symbol_blocks.append(symbols[block_start:block_end])
-        if len(symbols)%block_size > 0:
+        if len(symbols) % block_size > 0:
             symbol_blocks.append(symbols[block_end:])
         
         # go through symbol blocks and retrieve data
@@ -61,8 +63,6 @@ class Etrade_Quote(Etrade):
             # get ALL
             # symbols_string = ','.join(symbol_block)
             symbols_string = ','.join([x.lstrip('^') for x in symbol_block])
-            print(symbol_block)
-            print(symbols_string)
             request_arguments = {
                 'url': 'https://api.etrade.com/v1/market/quote/%s.json' % symbols_string,
                 'params': {
@@ -142,7 +142,7 @@ class Etrade_Quote(Etrade):
         db_status = self.db.table_read('status_db')
         
         # found is 5 days check
-        found_update = int(datetime.now().timestamp()) - (3600 * 24 * 5)
+        found_update = int(datetime.now().timestamp()) - (3600 * 24 * 1)
         # not found is 1/2 year check
         not_found_update = int(datetime.now().timestamp()) - (3600 * 24 * 182)
 
