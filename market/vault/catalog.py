@@ -84,16 +84,18 @@ class Catalog():
     
     catalog = {
         'update': {
-            'info': 'update info and chart',
+            'info': 'update all',
             'sets': {
-                'YahooF_Chart': {
+                'update all': {
                     'scrapes': {
-                        # YahooF_Chart: {'tables': {'all': {},}},
-                        # YahooF_Info: {'tables': {'all': {},}},
-                        # Finviz_Ticker_News: {'tables': {'all': {},}},
-                        # Polygon_News: {'tables': {'all': {},}},
-                        # Fred: {'tables': {'all': {},}},
-                        # File_Files: {'tables': {'all': {},}},
+                        File_Files: {'tables': {'all': {},}},
+                        Fred: {'tables': {'all': {},}},
+                        FMP_Stocklist: {'tables': {'all': {},}},
+                        Polygon_Tickers: {'tables': {'all': {},}},
+                        Polygon_News: {'tables': {'all': {},}},
+                        Finviz_Ticker_News: {'tables': {'all': {},}},
+                        YahooF_Chart: {'tables': {'all': {},}},
+                        YahooF_Info: {'tables': {'all': {},}},
                         Etrade_Quote: {'tables': {'all': {},}},
                     },
                 },
@@ -112,6 +114,42 @@ class Catalog():
                                 'table_reference': {
                                     'column_settings': [
                                         ['chart', 'chart'],
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        'fundamental': {
+            'info': 'fundamental data',
+            'post_procs': [[merge, {}]],
+            'sets': {
+                'YahooF_Fundamental': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        YahooF_Fundamental: {
+                            'post_procs': [[reference, {}]],
+                            'tables': {
+                                'table_reference': {
+                                    'column_settings': [
+                                        ['fundamental', 'fundamental'],
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+                'YahooF_Fundamental_Quarterly': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        YahooF_Fundamental_Quarterly: {
+                            'post_procs': [[reference, {}]],
+                            'tables': {
+                                'table_reference': {
+                                    'column_settings': [
+                                        ['fundamental_quarterly', 'fundamental_quarterly'],
                                     ],
                                 },
                             },
@@ -244,40 +282,40 @@ class Catalog():
                 },
             },
         },
-        'symbols_scraped': {
-            'info': 'get all symbols in our scrapes',
-            'post_procs': [[merge, {}]],
-            'sets': {
-                'YahooF_Info': {
-                    'scrapes': {
-                        YahooF_Info: {
-                            'post_procs': [[merge, {'allow_collision': True}]],
-                            'tables': {
-                                'info': {
-                                    'column_settings': [
-                                        ['symbol', 'symbol'],
-                                    ],
-                                },
-                            },
-                        },
-                    },
-                },
-                'YahooF_Chart': {
-                    'scrapes': {
-                        YahooF_Chart: {
-                            'post_procs': [[merge, {}]],
-                            'tables': {
-                                'table_reference': {
-                                    'column_settings': [
-                                        ['symbol', 'symbol'],
-                                    ],
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        },
+        # 'symbols_scraped': {
+        #     'info': 'get all symbols in our scrapes',
+        #     'post_procs': [[merge, {}]],
+        #     'sets': {
+        #         'YahooF_Info': {
+        #             'scrapes': {
+        #                 YahooF_Info: {
+        #                     'post_procs': [[merge, {'allow_collision': True}]],
+        #                     'tables': {
+        #                         'info': {
+        #                             'column_settings': [
+        #                                 ['symbol', 'symbol'],
+        #                             ],
+        #                         },
+        #                     },
+        #                 },
+        #             },
+        #         },
+        #         'YahooF_Chart': {
+        #             'scrapes': {
+        #                 YahooF_Chart: {
+        #                     'post_procs': [[merge, {}]],
+        #                     'tables': {
+        #                         'table_reference': {
+        #                             'column_settings': [
+        #                                 ['symbol', 'symbol'],
+        #                             ],
+        #                         },
+        #                     },
+        #                 },
+        #             },
+        #         },
+        #     },
+        # },
        'us_symbols': {
             'info': 'get all symbols for market and locale',
             # 'post_procs': [[merge, {}]],
@@ -366,6 +404,110 @@ class Catalog():
                         #     'post_procs': [[reference, {}]],
                         #     'tables': { 'table_reference': { 'column_settings': [ ['chart', 'chart'], ], }, },
                         # },
+                    },
+                },
+            },
+        },
+        'sp500': {
+            'info': 'get s&p 500 data',
+            'post_procs': [[merge, {}]],
+            'sets': {
+                'File_Files': {
+                    'post_procs': [[merge, {}]],
+                    'scrapes': {
+                        File_Files: {
+                            # 'post_procs': [[merge, {}]],
+                            'tables': {
+                                'SPDRS_XLB': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                                'SPDRS_XLC': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                        ['Index Weight', 'index_weight'],
+                                    ],
+                                },
+                                'SPDRS_XLE': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                                'SPDRS_XLF': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                                'SPDRS_XLI': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                                'SPDRS_XLK': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                                'SPDRS_XLP': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                                'SPDRS_XLRE': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                                'SPDRS_XLU': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                                'SPDRS_XLV': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                                'SPDRS_XLY': {
+                                    'column_settings': [
+                                        ['Symbol', 'symbol'],
+                                        ['Index Weight', 'index_weight'],
+                                        ['Last', 'price'],
+                                        ['Volume', 'volume'],
+                                    ],
+                                },
+                            },
+                        },
                     },
                 },
             },

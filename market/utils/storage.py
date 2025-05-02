@@ -15,6 +15,12 @@ def load(name):
     f.close()
     return data
 
+def timestamp(name):
+    fileName = name+'.pickle'
+    if not os.path.exists(fileName):
+        return None
+    return os.path.getmtime(fileName)
+
 def backup(name):
     basename = os.path.basename(name)
     dirname = os.path.dirname(name)
