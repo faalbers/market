@@ -1,5 +1,6 @@
 from ..tickers import Tickers
-# from ..viz import Viz
+from ..vault import Vault
+from ..viz import Viz
 import pandas as pd
 import numpy as np
 from pprint import pp
@@ -23,19 +24,37 @@ class Analysis():
                 return Analysis.__get_param(data[key], new_param)
         return None
 
-    def __init__(self, tickers=None, recache=False):
+    def __init__(self, tickers):
         self.tickers = tickers
-        self.__make_symbols(recache)
+        self.vault = Vault()
+        self.viz = Viz()
+        self.__get_data()
         # self.benchmarks = Tickers(['SPY', 'QQQ'])
-        # self.viz = Viz()
         # self.vault = Vault()
 
-    def test(self):
-        print(self.charts['AAPL'])
-        # values = self.get_values(['etrade_availability_info'])
-        # for symbol, value in values.items():
-        #     if value != None:
-        #         print(symbol, value)
+    def test(self, symbol, date):
+        if not symbol in self.symbols: return
+        symbol_data = self.symbols[symbol]
+        if symbol_data['type'] != 'EQUITY': return
+        if symbol_data['sector'] == None: return
+        sector = symbol_data['sector']
+        # df = self.sector_indices[[sector]].loc[date:]
+        df = self.sector_indices[[sector]]
+        df_symbol = self.charts[symbol]['Adj Close']
+        first_date = df_symbol.index[0]
+        df = df.join(self.charts[symbol]['Adj Close'])
+        df = df.loc[first_date:].loc[date:]
+        df['Adj Close'] = df['Adj Close'].ffill()
+        df = df.rename(columns={'Adj Close': symbol})
+        # df = (df / df.iloc[0]) - 1.0
+        df = (df / df.iloc[0])
+        print(df)
+        self.viz.plot_dataframe(df-1.0, line=0.0)
+        df['compare'] = (df[symbol]/df[sector])-1.0
+        df['follow'] = (df[symbol]-1.0)/(df[sector]-1.0)
+        df['follow'] = df['follow'].clip(lower=-10, upper=10)
+        self.viz.plot_dataframe(df[['compare']], line=0.0)
+        self.viz.plot_dataframe(df[['follow']], line=0.0)
 
     def sector_industry(self):
         params = self.get_params()
@@ -292,37 +311,57 @@ class Analysis():
     #         sectors_industries[symbol_data['sector']].add(symbol_data['industry'])
     #     return sectors_industries
 
-    def __make_symbols(self, recache):
-        # get symbols
-        self.symbols = None
-        if not recache:
-            self.symbols = storage.load('analysis_symbols')
-        if recache or self.symbols == None:
-            if self.tickers == None:
-                raise Exception('no tickers to initialize')  
-            print('fetching symbols data')
-            analysis = self.tickers.get_analysis()
-            self.symbols = {}
-            for symbol, symbol_data in analysis.items():
-                # skip non us market symbols
-                if '.' in symbol: continue
+    def __get_data(self):
+        analysis = self.tickers.get_analysis()
+        self.symbols = {}
+        for symbol, symbol_data in analysis.items():
+            # skip non us market symbols
+            if '.' in symbol: continue
 
-                # skip some others
-                if 'name' in symbol_data:
-                    if symbol_data['name'] == None: continue
-                else:
-                    continue
-                if not symbol_data['type'] in self.equity_types: continue
-                
-                self.symbols[symbol] = symbol_data
-            storage.save(self.symbols, 'analysis_symbols')
-        
-        print(len(self.symbols))
+            # skip some others
+            if 'name' in symbol_data:
+                if symbol_data['name'] == None: continue
+            else:
+                continue
+            if not symbol_data['type'] in self.equity_types: continue
+            
+            self.symbols[symbol] = symbol_data
+        print('symbols: %d' % len(self.symbols))
+
+        # # get fundamental
+        # self.fundamental = self.tickers.get_fundamental()
 
         # get charts
-        self.charts = self.tickers.get_chart()
-        print(len(self.charts))
+        self.charts = storage.load('database/yahoof_chart')
+        print('charts: %d' % len(self.charts))
+
+        # get charts sector
+        sectors = {
+            'XLV': 'Healthcare',
+            'XLB': 'Basic Materials',
+            'XLK': 'Technology',
+            'XLF': 'Financial Services',
+            'XLI': 'Industrials',
+            'XLRE': 'Real Estate',
+            'XLC': 'Communication Services',
+            'XLU': 'Utilities',
+            'XLE': 'Energy',
+            'XLP': 'Consumer Defensive',
+            'XLY': 'Consumer Cyclical',
+        }
+        self.sector_indices = self.charts['SPY'][['Adj Close']].copy()
+        self.sector_indices = self.sector_indices.rename(columns={'Adj Close': 'S&P500'})
+        for sector_symbol, sector in sectors.items():
+            if not sector_symbol in self.charts:
+                raise Exception('sector ticker not found: %s' % sector_symbol)
+            self.sector_indices = self.sector_indices.join(self.charts[sector_symbol]['Adj Close'])
+            self.sector_indices = self.sector_indices.rename(columns={'Adj Close': sector})
         
+        # sector_indices = self.sector_indices / self.sector_indices.iloc[0]
+        # sp = sector_indices.pop('S&P500')
+        # test = (sector_indices.T / sp.values).T
+        # self.viz.plot_dataframe(test)
+
     # def news_sentiment(self):
     #     start_date = '2023-01-01'
     #     end_date = '2025-01-31'
