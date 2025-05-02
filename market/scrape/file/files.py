@@ -16,13 +16,21 @@ class File_Files(File):
             return sorted(db.table_read('status_db', column_values=['table_name']).keys())
         return [table_name]
 
-    def __init__(self, key_values=[], table_names=[]):
+    def __init__(self, key_values=[], table_names=[], forced=False):
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
         self.db = Database(self.dbName)
 
         self.readCSV()
 
+    def csv_preprocess(self, data, file_name):
+        if file_name.startswith('SPDRS'):
+            print(file_name)
+            data.columns = data.iloc[0]
+            data = data.iloc[1:]
+            print(data)
+        return data
+    
     def readCSV(self):
         status = self.db.table_read('status_db', column_values=['file_date'])
         
@@ -38,6 +46,7 @@ class File_Files(File):
 
             # read file into database
             data = pd.read_csv(csv_file)
+            data = self.csv_preprocess(data, os.path.basename(csv_file))
             data.to_sql(data_name, con=db_connection, index=False, if_exists='replace')
             status_db[data_name] = {'file_date': file_date}
 
