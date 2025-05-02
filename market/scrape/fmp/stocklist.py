@@ -13,7 +13,7 @@ class FMP_Stocklist(FMP):
             return ['stocklist']
         return [table_name]
 
-    def __init__(self, key_values=[], table_names=[]):
+    def __init__(self, key_values=[], table_names=[], forced=False):
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
         self.db = Database(self.dbName)

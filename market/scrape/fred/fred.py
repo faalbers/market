@@ -18,7 +18,7 @@ class Fred():
             return ['fred']
         return [table_name]
 
-    def __init__(self, key_values=[], table_names=[]):
+    def __init__(self, key_values=[], table_names=[], forced=False):
         self.logger = logging.getLogger('vault_multi')
         self.db = Database(self.dbName)
         self.fred = Fred_API(api_key=KEYS['FRED']['KEY'])

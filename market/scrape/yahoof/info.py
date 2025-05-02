@@ -187,7 +187,7 @@ class YahooF_Info(YahooF):
         if not data[0]: return [False, proc_upgrades_downgrades, data]
         return [True, proc_upgrades_downgrades, data]
 
-    def __init__(self, key_values=[], table_names=[]):
+    def __init__(self, key_values=[], table_names=[], forced=False):
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
         self.db = Database(self.dbName)
@@ -203,8 +203,10 @@ class YahooF_Info(YahooF):
         yflogger.addHandler(file_handler)
 
         # check what symbols need to be updated
-        symbols = self.update_check(key_values)
-        # symbols = key_values
+        if forced:
+            symbols = sorted(key_values)
+        else:
+            symbols = self.update_check(key_values)
         if len(symbols) == 0: return
 
         self.logger.info('YahooF:  Info: update')

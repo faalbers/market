@@ -29,22 +29,35 @@ class Tickers():
     # TODO: add scraped symbols
     # TODO: add US market symbols
 
-    def get_symbols(self):
-        return sorted(self.symbols)
-
-    def get_profiles(self, update=False):
-        return self.vault.get_data(['profile'], self.symbols, update=update)['profile']
+    def get_symbols(self, types=[]):
+        if len(types) == 0: return sorted(self.symbols)
+        profiles = self.get_profiles()
+        symbols = set()
+        for symbol, profile in profiles.items():
+            if profile['type'] in types: symbols.add(symbol)
+        return sorted(symbols)
     
-    def get_analysis(self, update=False):
-        return self.vault.get_data(['analysis'], self.symbols, update=update)['analysis']
-    
-    def get_prices(self, update=False):
-        return self.vault.get_data(['price'], self.symbols, update=update)['price']
+    def get_types(self):
+        profiles = self.get_profiles()
+        types = set()
+        for symbol, profile in profiles.items():
+            types.add(profile['type'])
+        return sorted(types)
 
-    def get_chart(self, start_date=None, end_date=None, update=False):
+    def get_profiles(self, update=False, forced=False):
+        return self.vault.get_data(['profile'], self.symbols, update=update, forced=forced)['profile']
+    
+    def get_analysis(self, update=False, forced=False):
+        return self.vault.get_data(['analysis'], self.symbols, update=update, forced=forced)['analysis']
+    
+    def get_prices(self, update=False, forced=False):
+        return self.vault.get_data(['price'], self.symbols, update=update, forced=False)['price']
+
+    def get_chart(self, start_date=None, end_date=None, update=False, forced=False):
         # we cache if more the 65
         if len(self.symbols) > 65:
-            if update: self.update(['chart'])
+            # update if needed
+            if update: self.update(['chart'], forced=forced)
             
             storage_name = 'database/%s' % YahooF_Chart.dbName
             chart_cached = storage.load(storage_name)
@@ -62,7 +75,7 @@ class Tickers():
             return chart
 
         # we get from vault if 65 or less
-        chart_data = self.vault.get_data(['chart'], self.symbols, update=update)['chart']
+        chart_data = self.vault.get_data(['chart'], self.symbols, update=update, forced=forced)['chart']
         if 'chart' in chart_data:
             chart_data = chart_data['chart']
         else:
@@ -81,12 +94,32 @@ class Tickers():
                 df = df.loc[:end_date]
             chart[symbol] = df
         return chart
+    
+    def get_fundamental(self, start_date=None, end_date=None, update=False, forced=False):
+        fundamental = self.vault.get_data(['fundamental'], self.symbols, update=update, forced=forced)['fundamental']
+        print(fundamental.keys())
+
+        fundamentals = {}
+        for fundamental_name, fundamental_data in fundamental.items():
+            fundamentals[fundamental_name] = {}
+            for symbol, f_data in fundamental_data.items():
+                df = pd.DataFrame(f_data).T
+                df.index = pd.to_datetime(df.index, unit='s')
+                df.sort_index(inplace=True)
+                df.index = df.index.floor('D') # set it to beginning of day
+                df = df.drop('timestamp', axis=1)
+                if start_date:
+                    df = df.loc[start_date:]
+                if end_date:
+                    df = df.loc[:end_date]
+                fundamentals[fundamental_name][symbol] = df.round(0)
+        return fundamentals
 
     def get_all(self):
         return self.vault.get_data(['all'], self.symbols)['all']
 
-    def update(self, catalogs):
-        self.vault.update(catalogs, sorted(self.symbols))
+    def update(self, catalogs, forced=False):
+        self.vault.update(catalogs, sorted(self.symbols), forced=forced)
 
     def make_data_report(self):
         all_data = self.get_all()
