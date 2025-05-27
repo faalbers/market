@@ -5,15 +5,16 @@ from pprint import pp
 import yfinance as yf
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import pandas as pd
 
 class YahooF_Info(YahooF):
     dbName = 'yahoof_info'
 
     @staticmethod
-    def get_table_names(table_name):
-        if table_name == 'all':
+    def get_data_names(data_name):
+        if data_name == 'all':
             return ['info']
-        return [table_name]
+        return [data_name]
     
     def get_info(self, data=None):
         def proc_info(ticker, data):
@@ -187,10 +188,11 @@ class YahooF_Info(YahooF):
         if not data[0]: return [False, proc_upgrades_downgrades, data]
         return [True, proc_upgrades_downgrades, data]
 
-    def __init__(self, key_values=[], table_names=[], forced=False):
+    def __init__(self, key_values=[], data_names=[], update = False, forced=False):
+        self.db = Database(self.dbName)
+        if not update: return
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
-        self.db = Database(self.dbName)
 
         # make yfinance non verbose
         yflogger = logging.getLogger('yfinance')
@@ -213,7 +215,7 @@ class YahooF_Info(YahooF):
         self.logger.info('YahooF:  Info: symbols processing : %s' % len(symbols))
 
         # backup first
-        self.db.backup()
+        self.logger.info('YahooF:  Info: %s' % self.db.backup())
 
         exec_list = [
             [symbol, [
@@ -227,44 +229,69 @@ class YahooF_Info(YahooF):
                     # self.get_recommendations,
                     # self.get_upgrades_downgrades,
                 ], {'ticker': None, 'data': None}] for symbol in symbols]
-        self.multi_execs(exec_list)
+        self.multi_execs(exec_list, yfinance_ok=True)
 
     def update_check(self, symbols):
-        db_status = self.db.table_read('status_db')
+        timestamp_pdt = int(datetime.now().timestamp())
+
+        one_month_ts = timestamp_pdt - (3600 * 24 * 31)
+        half_year_ts = timestamp_pdt - (3600 * 24 * 182)
+
+        status_db = self.db.table_read('status_db', keys=symbols)
+
+        # found and last read more then one month ago
+        one_month = (status_db['found'] > 0) & (status_db['timestamp'] < one_month_ts)
         
-        # found is 1 days check
-        found_update = int(datetime.now().timestamp()) - (3600 * 24 * 1)
-        # not found is 1/2 year check
-        not_found_update = int(datetime.now().timestamp()) - (3600 * 24 * 182)
+        # not found and last read more then a half year ago
+        one_year = (status_db['found'] == 0) & (status_db['timestamp'] < half_year_ts)
+        
+        # checked from status_db
+        status_check = set(status_db[one_month ^ one_year].index.tolist())
 
-        update_symbols = []
-        for symbol in symbols:
-            if not symbol in db_status:
-                # never done before, add it
-                update_symbols.append(symbol)
-            else:
-                if db_status[symbol]['found']:
-                    # found before, only do again after 24 h
-                    if db_status[symbol]['timestamp'] <= found_update: update_symbols.append(symbol)
-                else:
-                    # not found before, only try again after 1/2 year
-                    if db_status[symbol]['timestamp'] <= not_found_update: update_symbols.append(symbol)
+        # not read
+        not_read = set(symbols).difference(set(status_db.index))
 
-        return update_symbols
+        return sorted(not_read.union(status_check))
 
     def push_api_data(self, symbol, result):
-        timestamp = int(datetime.now().timestamp())
         found = result[0]
-        status_info = {
-            'timestamp': timestamp,
-            'found': found,
-            'message': str(result[2])
-        }
-
-        self.db.table_write('status_db', {symbol: status_info}, key_name='symbol', method='update')
-        if not found:
-            return
+        message = result[2]
         result = result[1]
         
+        timestamp = int(datetime.now().timestamp())
+        status = {
+            'timestamp': timestamp,
+            'found': found,
+            'message': str(message)
+        }
+        status = pd.DataFrame([status], index=[symbol])
+        status.index.name = 'symbol'
+        self.db.table_write('status_db', status)
+        
+        if not found: return
+
         result['timestamp'] = timestamp
-        self.db.table_write('info', {symbol: result}, key_name='symbol', method='replace')
+        result = pd.DataFrame([result], index=[symbol])
+        if 'symbol' in result.columns: result = result.drop('symbol', axis=1)
+        result.index.name = 'symbol'
+        self.db.table_write('info', result)
+
+    def get_symbols(self):
+        return self.db.get_primary_values('info')
+
+    def get_vault_data(self, data_name, columns, key_values):
+        if data_name == 'info':
+            if len(columns) > 0:
+                column_names = [x[0] for x in columns]
+                data = self.db.table_read('info', keys=key_values, columns=column_names)
+                data = data.rename(columns={x[0]: x[1] for x in columns})
+                return data
+            else:
+                data = self.db.table_read('info', keys=key_values)
+                return data
+    
+    def get_vault_params(self, data_name):
+        if data_name == 'info':
+            column_types = self.db.get_table_info('info')['columnTypes']
+            column_types.pop('symbol')
+            return column_types
