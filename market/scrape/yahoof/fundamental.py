@@ -1,30 +1,28 @@
 from .yahoof import YahooF
 import logging, time
 from ...database import Database
-from datetime import datetime
+from ...utils import yfinancetest
+from datetime import datetime, UTC
 from pprint import pp
 import pandas as pd
 from dateutil.relativedelta import relativedelta
+from multiprocessing import Pool
 
 class YahooF_Fundamental(YahooF):
     dbName = 'yahoof_fundamental'
 
     @staticmethod
-    def get_table_names(table_name):
-        if table_name == 'all':
+    def get_data_names(data_name):
+        if data_name == 'all':
             return ['fundamental']
-        return [table_name]
+        return [data_name]
 
     def get_balance_sheet(self, data={}):
         def proc_balance_sheet(ticker, data):
             while True:
                 try:
-                    balance_sheet = ticker.balance_sheet
-                    balance_sheet = balance_sheet.T
-                    balance_sheet.index = balance_sheet.index.astype('int64') // 10**9
-                    for index, row in balance_sheet.iterrows():
-                        data[index] = row.dropna().to_dict()
-                    if len(data) == 0: return ([False, data, 'balance_sheet is empty'])
+                    data = ticker.balance_sheet
+                    if data.empty: return [False, data, 'balance_sheet is empty']
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
@@ -41,14 +39,7 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     income_stmt = ticker.income_stmt
-                    income_stmt = income_stmt.T
-                    income_stmt.index = income_stmt.index.astype('int64') // 10**9
-                    for index, row in income_stmt.iterrows():
-                        row_data = row.dropna().to_dict()
-                        if not index in data[1]:
-                            data[1][index] = row_data
-                        else:
-                            data[1][index].update(row_data)
+                    data[1] = pd.concat([data[1], income_stmt])
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
@@ -64,14 +55,7 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     cash_flow = ticker.cash_flow
-                    cash_flow = cash_flow.T
-                    cash_flow.index = cash_flow.index.astype('int64') // 10**9
-                    for index, row in cash_flow.iterrows():
-                        row_data = row.dropna().to_dict()
-                        if not index in data[1]:
-                            data[1][index] = row_data
-                        else:
-                            data[1][index].update(row_data)
+                    data[1] = pd.concat([data[1], cash_flow])
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
@@ -82,10 +66,11 @@ class YahooF_Fundamental(YahooF):
         if not data[0]: return [False, proc_cash_flow, data]
         return [True, proc_cash_flow, data]
 
-    def __init__(self, key_values=[], table_names=[], forced=False):
+    def __init__(self, key_values=[], data_names=[], update = False, forced=False):
+        self.db = Database(self.dbName)
+        if not update: return
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
-        self.db = Database(self.dbName)
 
         # make yfinance non verbose
         yflogger = logging.getLogger('yfinance')
@@ -105,13 +90,15 @@ class YahooF_Fundamental(YahooF):
         if len(symbols) == 0: return
 
         # leave if yfinance limit rate
-        if not self.yfinance_ok(): return
+        if not yfinancetest():
+            self.logger.info('YahooF:  Fundamental: yfinance limit rate')
+            return
 
         self.logger.info('YahooF:  Fundamental: update')
         self.logger.info('YahooF:  Fundamental: symbols processing : %s' % len(symbols))
 
         # backup first
-        self.db.backup()
+        self.logger.info('YahooF:  Fundamental: %s' % self.db.backup())
 
         exec_list = [
             [symbol, [
@@ -122,77 +109,80 @@ class YahooF_Fundamental(YahooF):
         self.multi_execs(exec_list, yfinance_ok=True)
 
     def update_check(self, symbols):
-        db_status = self.db.table_read('status_db')
+        status_db = self.db.table_read('status_db', keys=symbols)
 
-        now = datetime.now()
-        months_3 = (now - relativedelta(months=3)).timestamp()
-        months_12 = (now - relativedelta(months=12)).timestamp()
-        months_18 = (now - relativedelta(months=18)).timestamp()
+        timestamp_pdt = int(datetime.now().timestamp())
+        one_year_plus_ts = timestamp_pdt - (3600 * 24 * 375)
+        two_year_ts = timestamp_pdt - (3600 * 24 * 365 * 2)
 
-        update_symbols = []
-        for symbol in symbols:
-            if not symbol in db_status:
-                # never done before, add it
-                update_symbols.append(symbol)
-            elif db_status[symbol]['timestamp'] < months_3 and db_status[symbol]['found']:
-                    # if it's longer than 3 months and it's found before
-                    if db_status[symbol]['last_timestamp'] < months_12 and db_status[symbol]['last_timestamp'] > months_18:
-                        # only redo if it's between 12 and 18 months. If longer, it probably will not be updated again
-                        update_symbols.append(symbol)
-
-        return update_symbols
+        update_found = (status_db['found'] > 0) & (status_db['last_timestamp'] < one_year_plus_ts) & (status_db['last_timestamp'] > two_year_ts)
+        update_found = set(status_db[update_found].index)
+        
+        update_new = set(symbols).difference(set(status_db.index))
+        
+        update = update_found.union(update_new)
+        
+        return sorted(update)
     
     def push_api_data(self, symbol, result):
-        timestamp = int(datetime.now().timestamp())
         found = result[0]
-        status_info = {
+        message = result[2]
+        result = result[1]
+
+
+        timestamp = int(datetime.now().timestamp())
+        status = {
             'timestamp': timestamp,
             'timestamp_str': str(datetime.fromtimestamp(timestamp)),
             'last_timestamp': 0,
             'last_timestamp_str': '',
             'found': found,
-            'message': str(result[2])
+            'message': str(message)
         }
         if not found:
-            self.db.table_write('status_db', {symbol: status_info}, key_name='symbol', method='replace')
+            status = pd.DataFrame([status], index=[symbol])
+            status.index.name = 'symbol'
+            self.db.table_write('status_db', status)
             return
-        result = result[1]
-        status_info['last_timestamp'] = sorted(result, reverse=True)[0]
-        status_info['last_timestamp_str'] = str(datetime.fromtimestamp(status_info['last_timestamp']))
-
-        # make unique table name
-        table_name = 'fundamental_'
-        for c in symbol:
-            if c.isalnum():
-                table_name += c
-            else:
-                table_name += '_'
-
-        # get newly found result
-        result_df = pd.DataFrame(result).T
-        result_df.sort_index(inplace=True)
-        result_df.index.name = 'timestamp'
-
-        # we need to commit everything before reading from database
-        self.db.commit()
-        current_df = self.db.table_read_df(table_name, index_column='timestamp')
-        if not current_df.empty:
-            # update current data with new data
-            current_df.update(result_df)
-            result_concat = result_df[~result_df.index.isin(current_df.index)]
-            # concat non existant data
-            if not result_concat.empty:
-                current_df = pd.concat([current_df, result_concat])
-                # print(current_df)
-            current_df.sort_index(inplace=True)
-            # write it out updated
-            self.db.table_write_df(table_name, current_df)
-        else:
-            # write out fresh new data
-            self.db.table_write_df(table_name, result_df)
         
-        # write table reference
-        self.db.table_write('table_reference', {symbol: {'fundamental': table_name}}, 'symbol', method='append')
-    
+        result = result.T.infer_objects()
+        
+        # take out utc time of indices and change them to timestamps, rename index
+        result.index = result.index.tz_localize(None)
+        result.index = result.index.astype('int64') // 10**9
+        result.index.name = 'timestamp'
+        result.sort_index(inplace=True)
+        self.db.table_write_reference(symbol, 'fundamental', result, replace=True)
+
         # write status
-        self.db.table_write('status_db', {symbol: status_info}, key_name='symbol', method='replace')
+        status['last_timestamp'] = int(result.index[-1])
+        status['last_timestamp_str'] = str(pd.to_datetime(status['last_timestamp'], unit='s'))
+        status = pd.DataFrame([status], index=[symbol])
+        status.index.name = 'symbol'
+        self.db.table_write('status_db', status)
+
+    def get_vault_data(self, data_name, columns, key_values):
+        if data_name == 'fundamental':
+            if len(columns) > 0:
+                column_names = [x[0] for x in columns]
+                data = self.db.timeseries_read('fundamental', keys=key_values, columns=column_names)
+                columns_rename = {x[0]: x[1] for x in columns if x[1] != None}
+                if len(columns_rename) > 0:
+                    for symbol in data:
+                        data[symbol] = data[symbol].rename(columns=columns_rename)
+                return data
+            else:
+                data = self.db.timeseries_read('fundamental', keys=key_values)
+                return data
+
+    def get_vault_params(self, data_name):
+        if data_name == 'fundamental':
+            references = sorted(self.db.table_read_df('table_reference')['fundamental'])
+            max_len = 0
+            for reference in references:
+                column_types = self.db.get_table_info(reference)['columnTypes']
+                column_types.pop('timestamp')
+                # if len(column_types) > max_len:
+                #     max_len = len(column_types)
+                #     print(max_len)
+                if len(column_types) >= 219: return(column_types)
