@@ -1,5 +1,5 @@
 from ratelimit import limits, sleep_and_retry
-from ...utils import stop_text
+from ...utils import stop_text, yfinancetest
 import yfinance as yf
 
 class YahooF():
@@ -42,19 +42,8 @@ class YahooF():
                 self.db.commit()
                 break
             if (count_done % 100) == 0:
-                if yfinance_ok:
-                    if not self.yfinance_ok():
-                        break
-                    else:
-                        self.logger.info('YahooF:  yfinance still ok ...')
+                if not yfinancetest():
+                    break
+                else:
+                    self.logger.info('YahooF:  yfinance still ok ...')
         self.logger.info('YahooF:  done: %s , failed: %s' % (count_done, failed_total))
-
-    def yfinance_ok(self):
-        ticker = yf.Ticker('AAPL')
-        try:
-            ticker.fast_info['lastPrice']
-        except Exception as e:
-            if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
-                self.logger.info('YahooF:  Too Many Requests. Rate limited. Change VPN location')
-                return False
-        return True
