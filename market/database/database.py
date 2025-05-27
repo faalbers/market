@@ -1,33 +1,40 @@
-import sqlite3, json, os, glob, shutil, logging
-import numpy as np
-from pprint import pp
-from datetime import datetime
+import sqlite3, os, glob, shutil, json
 import pandas as pd
+from pprint import pp
+import numpy as np
+from multiprocessing import Pool
 
 class Database():
-    sql_data_types = {
-        int:  'INTEGER',
-        float:  'REAL',
-        bool:  'BOOLEAN',
-        str: 'TEXT',
-        dict: 'JSON',
-        list: 'JSON',
-    }
-    sql_data_typesPD = {
+    sql_types = {
         np.int64:  'INTEGER',
         np.float64:  'REAL',
-        float:  'REAL',
-        bool:  'BOOLEAN',
-        str: 'TEXT',
-        dict: 'JSON',
-        list: 'JSON',
+        np.bool:  'BOOLEAN',
+        # int:  'INTEGER',
+        # float:  'REAL',
+        # bool:  'BOOLEAN',
+        # str: 'TEXT',
+        # dict: 'JSON',
+        # list: 'JSON',
     }
 
-    def __init__(self, name):
+    def __sql_type(self, column):
+        column_type = column.dtype.type
+        if column_type == np.object_:
+            if isinstance(column, pd.Index): return 'TEXT'
+            data_types = set(column.apply(type).tolist())
+            if len(data_types.difference(set([str, float, type(None)]))) == 0: return 'TEXT'
+            if len(data_types.difference(set([bool, float]))) == 0: return 'BOOLEAN'
+            if len(data_types.difference(set([list, dict, float, type(None)]))) == 0: return 'JSON'
+            raise ValueError('Unknown data types: %s' % data_types)
+
+        return self.sql_types[column_type]
+
+    def __init__(self, name, new=False):
         self.name = name
-        self.connection = sqlite3.connect('database/%s.db' % self.name)
-        # initialize first execute so we can start timing later
-        self.get_table_names()
+        file_path = 'database/%s.db' % self.name
+        if new and os.path.exists(file_path): os.remove(file_path)
+        self.connection = sqlite3.connect(file_path)
+        self.timestamp = os.path.getmtime(file_path)
 
     def __del__(self):
         self.connection.commit()
@@ -36,12 +43,6 @@ class Database():
     def close(self):
         self.connection.close()
         self.connection = None
-
-    def get_connection(self):
-        return self.connection
-    
-    def get_cursor(self):
-        return self.connection.cursor()
 
     def commit(self):
         self.connection.commit()
@@ -59,7 +60,8 @@ class Database():
             for filename_old in backup_files:
                 splits = filename_old.split(self.name)
                 old_version = int(splits[1].strip('_').strip('.db'))
-                if old_version > 4:
+                # if old_version > 4:
+                if old_version > 1:
                     os.remove(filename_old)
                     continue
                 new_version = old_version + 1
@@ -69,286 +71,17 @@ class Database():
 
         try:
             shutil.copyfile(filename, filename_backup)
-            logger = logging.getLogger("vault_multi")
-            logger.info(f"File backup from {filename} to {filename_backup}")
-
+            return 'File backup from %s to %s' % (filename, filename_backup)
         except FileNotFoundError:
-            pass
+            return 'File backup from %s failed' % filename
 
-    def table_read_df(self, table_name, index_column=None):
-        try:
-            df = pd.read_sql_query('SELECT * FROM %s' % table_name, self.connection)
-        except:
-            return pd.DataFrame()
-        if index_column:
-            df.set_index(index_column, inplace=True)
-        return df
-    
-    def table_read_timeseries(self, table_name):
-        df = self.table_read_df(table_name, index_column='timestamp')
-        if df.empty: return df
-        df.index = pd.to_datetime(df.index, unit='s')
-        df.index.name = 'date'
-        return df
-    
-    def table_write_df(self, table_name, df):
-        if df.empty: return
-        dtypes = {df.index.name: self.sql_data_typesPD[df.index.dtype.type] + ' PRIMARY KEY'}
-        df.to_sql(table_name, self.connection, if_exists='replace', index=True, dtype=dtypes)
-
-    def table_write_df_old(self, table_name, df):
-        # create dtypes
-        dtypes = df.dtypes
-        dtypes[df.index.name] = df.index.dtype
-        dtypes = dtypes.to_frame('types')
-        try:
-            dtypes['sql'] = dtypes['types'].apply(lambda x: self.sql_data_typesPD[x.type])
-        except:
-            # TODO this problem accures rarely. I don't know how to solveit yet
-            print('crapped out here')
-            print('df')
-            print(df)
-            print("dtypes['types']")
-            print(dtypes['types'])
-            print('self.sql_data_typesPD')
-            pp(self.sql_data_typesPD)
-            raise ValueError('Da Lambda crapped out')
-        dtypes = dtypes['sql'].to_dict()
-        dtypes[df.index.name] += ' PRIMARY KEY'
-
-        # create table
-        df.to_sql(table_name, self.connection, if_exists='replace', index=True, dtype=dtypes)
-
-    def table_write(self, table_name, data, key_name, method='append'):
-        # if data is empty, do nothing
-        if len(data) == 0:
-            return
-        
-        # expecting edit methods
-        if not method in ['append', 'update', 'replace']:
-            raise ValueError('Database.table_write: wrong method: %s' % method)
-
-         # get key data type
-        key_sql_data_type = None
-        if isinstance(data, dict):
-            for key, key_data in data.items():
-                key_sql_data_type = self.sql_data_types[type(key)]
-                break
-        elif isinstance(data, list):
-            key_sql_data_type = self.sql_data_types[type(data[0])]
-        else:
-            raise ValueError('Database.table_write: unknown data type: %s' % type(data))
-        if key_sql_data_type == None:
-            raise ValueError('Database.table_write: key has unknown SQL data type')
-
+    def get_table_names(self):
         cursor = self.connection.cursor()
-        # only create table if not exist, add primary key column
-        exec_string = "CREATE TABLE IF NOT EXISTS %s  ([%s] %s PRIMARY KEY)" % (table_name, key_name, key_sql_data_type)
-        cursor.execute(exec_string)
-
-        # get table info
-        table_info = self.get_table_info(table_name)
-        if not key_name in table_info['primaryKeyColumns']:
-            raise ValueError('Database.table_write: key name not in existing table: %s' % key_name)
-        table_columns = set(table_info['columns'])
-
-        # table indices as we build, maybe later implement with proc
-        key_values = cursor.execute("SELECT %s FROM %s" % (key_name, table_name)).fetchall()
-        key_values = set([x[0] for x in key_values])
-
-        # set data columns structure
-        column_sql_types = {}
-        if isinstance(data, dict):
-            for key_value, key_data in data.items():
-                for column_name, value in key_data.items():
-                    if value == None: continue
-                    column_sql_types[column_name] = self.sql_data_types[type(value)]
-
-        # add columns if needed
-        columns_to_add = set(column_sql_types.keys()).difference(table_columns)
-        for column_name in columns_to_add:
-            cursor.execute("ALTER TABLE %s ADD COLUMN [%s] %s" % (table_name, column_name, column_sql_types[column_name]))
-
-        columns = [key_name]+list(column_sql_types.keys())
-        values_append = []
-        values_update = []
-        drop_keys = set()
-        if isinstance(data, dict):
-            for key_value, key_data in data.items():
-                if key_value in key_values:
-                    # no need to append since it already exists
-                    if method == 'append': continue
-                    # drop key before appending it back
-                    elif method == 'replace': drop_keys.add(key_value)
-
-                row_values = [None]*len(columns)
-                row_values[0] = key_value
-                c_index = 1
-                for column_name in columns[1:]:
-                    if column_name in key_data:
-                        value = key_data[column_name]
-                        if column_sql_types[column_name] == 'JSON':
-                            value = json.dumps(value)
-                        row_values[c_index] = value
-                    c_index += 1
-                if method in ['append', 'replace']: 
-                    values_append.append(tuple(row_values))
-                else:
-                    if key_value in key_values:
-                        values_update.append(row_values)
-                    else:
-                        values_append.append(tuple(row_values))
-        elif isinstance(data, list):
-            for key_value in data:
-                if key_value in key_values:
-                    # no need to append since it already exists
-                    if method == 'append': continue
-                row_values = [key_value]
-                
-                if method == 'append': 
-                    values_append.append(tuple(row_values))
-
-        # drop rows
-        if len(drop_keys) > 0:
-            value_holder_string = ','.join(['?']*len(drop_keys))
-            exec_string = "DELETE FROM '%s' WHERE [%s] IN (%s)" % (table_name, key_name, value_holder_string)
-            cursor.execute(exec_string, tuple(drop_keys))
-
-        # append or update
-        if len(values_append) > 0:
-            columns_string = ','.join('[%s]'%x for x in columns)
-            value_holder_string = ','.join(['?']*len(columns))
-            exec_string = "INSERT OR IGNORE INTO %s (%s) VALUES (%s)" % (table_name, columns_string, value_holder_string)
-            cursor.executemany(exec_string, values_append)
-        if len(values_update) > 0:
-            for values in values_update:
-                update_columns = []
-                update_values = []
-                c_index = 1
-                for value in values[1:]:
-                    if value != None:
-                        update_columns.append(columns[c_index])
-                        update_values.append(value)
-                    c_index += 1
-                columns_string = ','.join('[%s]'%x for x in update_columns)
-                value_holder_string = ','.join(['?']*len(update_columns))
-                exec_string = "UPDATE %s SET (%s) = (%s) WHERE [%s] = '%s'"  % (table_name, columns_string, value_holder_string, columns[0], values[0])
-                cursor.execute(exec_string, tuple(update_values))
-        
+        names = [ x[0] for x in cursor.execute("SELECT name FROM sqlite_schema WHERE type='table'")]
         cursor.close()
-
-    def table_read(self, table_name, key_values=[], column_values=[], max_column=None):
-        # There is a limit on SQL entries for key_values
-        key_values_limit = 30000
-        key_values = list(key_values)
-        if len(key_values) > key_values_limit:
-            # cut key_values into chunks and combine results
-            chunks = {}
-            limit_idx = key_values_limit
-            while limit_idx < (len(key_values)+1):
-                key_values_chunk = key_values[limit_idx-key_values_limit:limit_idx]
-                chunk = self.table_read_chunk(table_name, key_values_chunk, column_values, max_column)
-                chunks = {**chunks, **chunk}
-                limit_idx += key_values_limit
-            left_idx = len(key_values) % key_values_limit
-            if left_idx > 0:
-                key_values_chunk = key_values[-left_idx:]
-                chunk = self.table_read_chunk(table_name, key_values_chunk, column_values, max_column)
-                chunks = {**chunks, **chunk}
-            return chunks
-        else:
-            # do the whole thing
-            return self.table_read_chunk(table_name, key_values, column_values, max_column)
-
-    # TODO hide this with '__'    
-    def table_read_chunk(self, table_name, key_values=[], column_values=[], max_column=None):
-        # get table info
-        table_info = self.get_table_info(table_name)
-        if not table_info: return {}
-        # get list of columns without the key columns
-        table_columns = table_info['columns']
-        column_values = set(column_values)
-        
-        # get key column if any and construct table_columns
-        key_column = None
-        if len(table_info['primaryKeyColumns']) > 0:
-            key_column = table_info['primaryKeyColumns'][0]
-        
-        # create selection exec string
-        if len(column_values) == 0:
-            # we are selecting all columns
-            columns_string = '*'
-        else:
-            # handle only columns that exist
-            columns = column_values.intersection(table_columns)
-            columns_string = ','.join(['[%s]'%x for x in columns])
-            # return empty if no columns to be searched
-            if columns_string == '': return {}
-            if key_column and not key_column in columns:
-                columns_string = '[%s],'%key_column+columns_string
-        exec_string = "SELECT %s FROM '%s'" % (columns_string, table_name)
-        
-        execution = None
-        cursor = self.connection.cursor()
-        if key_column and len(key_values) > 0:
-            # we will only get the ones with the key values
-            value_holder_string = ','.join(['?']*len(key_values))
-            exec_string += " WHERE [%s] IN (%s)" % (key_column, value_holder_string)
-            if max_column:
-                exec_string += " ORDER BY [%s] DESC LIMIT 1" % max_column
-            execution = cursor.execute(exec_string, tuple(key_values))
-        else:
-            # we are getting them all
-            if max_column:
-                exec_string += " ORDER BY [%s] DESC LIMIT 1" % max_column
-            execution = cursor.execute(exec_string)
-        data_columns = [x[0] for x in execution.description]
-        data_columns_sql_types = []
-        for column in data_columns:
-            data_columns_sql_types.append(table_info['columnTypes'][column])
-        data_values = execution.fetchall()
-        cursor.close()
-
-        # retrieve data in dictionary or list
-        data_dictionary = {}
-        data_list = []
-        key_column_index = -1
-        if key_column:
-            key_column_index = data_columns.index(key_column)
-        # print(data_columns)
-        # print(data_columns_sql_types)
-        # print(key_column_index)
-
-        for row_values in data_values:
-            # create dict out of row data
-            row_data = dict(zip(data_columns, row_values))
-
-            # handle JSON
-            json_indices = [i for i, s in enumerate(data_columns_sql_types) if s == 'JSON']
-            for json_index in json_indices:
-                if row_data[data_columns[json_index]] != None:
-                    row_data[data_columns[json_index]] = json.loads(row_data[data_columns[json_index]])
-
-            # get key value if needed
-            if key_column_index != -1: key_value = row_values[key_column_index]
-
-            # only keep row data that is requested
-            if len(column_values) > 0:
-                row_data = {k: v for k, v in row_data.items() if k in column_values}
-         
-            if key_column_index != -1:
-                data_dictionary[key_value] = row_data
-            else:
-                data_list.append(row_data)
-
-        if key_column:
-            return data_dictionary
-        else:
-            return data_list
+        return sorted(names)
 
     def get_table_info(self, table_name):
-        if not self.table_exists(table_name): return None
-
         table_info = {
             'columns': [],
             'primaryKeyColumns': [],
@@ -358,7 +91,9 @@ class Database():
         }
 
         cursor = self.connection.cursor()
-        table_columns = cursor.execute("PRAGMA table_info(%s)" % table_name).fetchall()
+        table_columns = cursor.execute("PRAGMA table_info('%s')" % table_name).fetchall()
+        if len(table_columns) == 0: return {}
+
         row_count = cursor.execute("SELECT COUNT(*) FROM %s" % table_name).fetchone()
         sql = cursor.execute("SELECT sql FROM sqlite_schema WHERE type='table' AND name='%s'" % table_name).fetchone()
         cursor.close()
@@ -372,30 +107,260 @@ class Database():
 
         return table_info
 
+    def table_keys(self, table_name):
+        cursor = self.connection.cursor()
+
+        # get table info
+        table_info = cursor.execute("PRAGMA table_info('%s')" % table_name).fetchall()
+        if len(table_info) == 0:
+            cursor.close()
+            return []
+        
+        # get primary key columns
+        primary_key_columns = [x[1] for x in table_info if x[5] == 1]
+        if len(primary_key_columns) == 0:
+            cursor.close()
+            return []
+
+        key_name = primary_key_columns[0]
+        key_values = cursor.execute("SELECT %s FROM %s" % (primary_key_columns[0], table_name)).fetchall()
+        cursor.close()
+        return sorted([x[0] for x in key_values])
+
+    def table_read(self, table_name, keys=[], columns=[]):
+        # keys = []
+        cursor = self.connection.cursor()
+
+        # get table info
+        self.commit()
+        table_info = cursor.execute("PRAGMA table_info('%s')" % table_name).fetchall()
+        if len(table_info) == 0:
+            cursor.close()
+            # nothing to retrieve
+            return pd.DataFrame()
+        all_columns = [x[1] for x in table_info]
+        json_columns = [x[1] for x in table_info if x[2] == 'JSON']
+        primary_key_columns = [x[1] for x in table_info if x[5] == 1]
+        
+        # handle column selection
+        exec_string = 'SELECT *'
+        if len(columns) > 0:
+            if len(primary_key_columns) > 0 and not primary_key_columns[0] in columns:
+                columns = [primary_key_columns[0]] + columns
+            columns = [x for x in columns if x in all_columns]
+            columns_string = ','.join(['[%s]'%x for x in columns])
+            exec_string = 'SELECT %s' % columns_string
+        exec_string += " FROM '%s'" % table_name
+        
+        # handle keys selection
+        if len(keys) > 0 and len(primary_key_columns) > 0:
+            if len(keys) <= 30000:
+                exec_string += " WHERE [%s] IN (%s)" % (primary_key_columns[0], ','.join(['?']*len(keys)))
+                execution = cursor.execute(exec_string, tuple(keys))
+            else:
+                execution = cursor.execute(exec_string)
+        else:
+            execution = cursor.execute(exec_string)
+
+        # fetch data
+        table_columns = [x[0] for x in execution.description]
+        table_data = execution.fetchall()
+        cursor.close()
+        table_data = pd.DataFrame(table_data, columns=table_columns)
+
+        # handle primary key
+        if len(primary_key_columns) > 0:
+            table_data.set_index(primary_key_columns[0], inplace=True)
+            table_data = table_data.sort_index()
+            if len(keys) > 30000:
+                table_data = table_data[table_data.index.isin(keys)]
+
+        # change json to data if needed
+        for column in table_data.columns:
+            if column not in json_columns: continue
+            table_data[column] = table_data[column].apply(lambda x: json.loads(x) if pd.notna(x) else x)
+
+        return table_data
+
+    def table_write(self, table_name, df, replace=False, update=True):
+        # since we are manipulating df, make a copy
+        df = df.copy()
+        if df.empty: return
+
+        # check index
+        index_name = df.index.name
+        index = False
+        if index_name != None:
+            if not df.index.is_unique: raise ValueError('Index is not unique')
+            if index_name in df.columns: raise ValueError('Index name same as colmn name')
+            index = True
+
+        # drop column where all values are nan
+        df.dropna(axis=1, how='all', inplace=True)
+
+        # get column types
+        dtypes = {}
+        if index:
+            dtypes[index_name] = self.__sql_type(df.index) + ' PRIMARY KEY'
+        for column in df.columns:
+            dtypes[column] = self.__sql_type(df[column])
+
+        # dump JSON columns if needed
+        for column, dtype in dtypes.items():
+            if dtype != 'JSON': continue
+            df[column] = df[column].apply(lambda x: json.dumps(x) if not isinstance(x, type(None)) else x)
+
+        cursor = self.connection.cursor()
+
+        # if force replace, no need to do all below
+        if replace:
+            if index:
+                df.to_sql(table_name, self.connection, if_exists='replace', index=True, dtype=dtypes)
+            else:
+                df.to_sql(table_name, self.connection, if_exists='replace', index=False, dtype=dtypes)
+            return
+
+        # we are reading data befor writing, so we commit first
+        self.commit()
+
+        # get table info
+        table_info = cursor.execute("PRAGMA table_info('%s')" % table_name).fetchall()
+        if len(table_info) == 0:
+            # it's a new on, just use to_sql
+            cursor.close()
+            if index:
+                df.to_sql(table_name, self.connection, if_exists='replace', index=True, dtype=dtypes)
+            else:
+                df.to_sql(table_name, self.connection, if_exists='replace', index=False, dtype=dtypes)
+            return
+        
+        # check if we need to add columns
+        table_columns = [x[1] for x in table_info]
+        for column_name, dtype in dtypes.items():
+            if column_name in table_columns: continue
+            cursor.execute("ALTER TABLE %s ADD COLUMN [%s] %s" % (table_name, column_name, dtype))
+
+        if index:
+            # handle dataframe with index
+            primary_key_columns = [x[1] for x in table_info if x[5] == 1]
+            if index_name in primary_key_columns:
+                # find indices to append or update
+                key_values = cursor.execute("SELECT %s FROM %s" % (index_name, table_name)).fetchall()
+                key_values = [x[0] for x in key_values]
+                df_append = df[~df.index.isin(key_values)]
+                df_update = df[df.index.isin(key_values)]
+                if not df_append.empty:
+                    # handle appends
+                    df_append.reset_index(inplace=True)
+                    columns_string = ','.join('[%s]'%x for x in df_append.columns)
+                    value_holder_string = ','.join(['?']*len(df_append.columns))
+                    exec_string = "INSERT OR IGNORE INTO %s (%s) VALUES (%s)" % (table_name, columns_string, value_holder_string)
+                    values = df_append.values.tolist()
+                    cursor.executemany(exec_string, values)
+                if not df_update.empty and update:
+                    # handle updates
+                    for index, row in df_update.iterrows():
+                        # only update non empty values
+                        row = row.dropna()
+                        if len(row) == 0: continue
+                        columns_string = ','.join('[%s]'%x for x in row.index)
+                        value_holder_string = ','.join(['?']*row.shape[0])
+                        exec_string = "UPDATE %s SET (%s) = (%s) WHERE [%s] = '%s'"  % (table_name, columns_string, value_holder_string, index_name, index)
+                        # print(tuple(row.tolist()))
+                        cursor.execute(exec_string, tuple(row.tolist()))
+        else:
+            # just append them all
+            df.to_sql(table_name, self.connection, if_exists='append', index=False, dtype=dtypes)
+        cursor.close()
+
+    def table_write_reference(self, symbol, reference, df, replace=False, update=True):
+        # make reference table name
+        reference_name = reference + '_' + symbol
+        self.table_write(reference_name, df, replace=replace, update=update)
+        table_reference = pd.DataFrame([{reference: reference_name}], index=[symbol])
+        table_reference.index.name = 'symbol'
+        self.table_write('table_reference', table_reference)
+
+    def table_rename(self, old_table_name, new_table_name):
+        cursor = self.connection.cursor()
+        cursor.execute("ALTER TABLE '%s' RENAME TO '%s'" % (old_table_name, new_table_name))
+        cursor.close()
+
+    def table_delete(self, table_name):
+        cursor = self.connection.cursor()
+        cursor.execute("DROP TABLE '%s'" % table_name)
+        cursor.close()
+        
+    def write_status(self, symbol, status):
+        status_df = pd.DataFrame([status], index=[symbol])
+        status_df.index.name = 'symbol'
+        self.table_write('status_db', status_df)
+        
+    @staticmethod
+    def reference_chunk(data):
+        keys = data[0]
+        columns = data[1]
+        index_date = data[2]
+        db_name = data[3]
+        db = Database(db_name)
+
+        timeseries = {}
+        for key, table_name in keys.items():
+            df = db.table_read(table_name, columns=columns)
+            if index_date:
+                df.index = pd.to_datetime(df.index, unit='s')
+                df.index.name = 'date'
+            timeseries[key] = df
+        
+        return timeseries
+
+    def timeseries_read(self, reference, keys=[], columns=[], index_date=True):
+        return self.table_read_reference(self, reference, keys=keys, columns=columns, index_date=index_date)
+
+    def table_read_reference(self, reference, keys=[], columns=[], index_date=False):
+        reference_table = self.table_read('table_reference', keys=keys, columns=[reference])[reference]
+        
+        timeseries = {}
+        if reference_table.shape[0] < 1200:
+            for key, table_name in reference_table.items():
+                df = self.table_read(table_name, columns=columns)
+                if index_date:
+                    df.index = pd.to_datetime(df.index, unit='s')
+                    df.index.name = 'date'
+                timeseries[key] = df
+            return timeseries
+        
+        # get with multi process
+        # gather symbol chunks based on cpu count
+        cpus = 6
+        keys = list(reference_table.index)
+        keys_limit = int(len(keys)/cpus)
+        if len(keys) % cpus > 0: keys_limit += 1
+        key_chunks = []
+        limit_idx = keys_limit
+        while limit_idx < (len(keys)+1):
+            key_chunk = keys[limit_idx-keys_limit:limit_idx]
+            dict_chunk = {key: reference_table[key] for key in key_chunk}
+            key_chunks.append((dict_chunk, columns, index_date, self.name))
+            limit_idx += keys_limit
+        left_idx = len(keys) % keys_limit
+        if left_idx > 0:
+            key_chunk = keys[-left_idx:]
+            dict_chunk = {key: reference_table[key] for key in key_chunk}
+            key_chunks.append((dict_chunk, columns, index_date, self.name))
+        
+        with Pool(processes=cpus) as pool:
+            results = pool.map(Database.reference_chunk, key_chunks)
+            for result in results:
+                timeseries.update(result)
+        
+        return timeseries
+
     def table_exists(self, table_name):
         return table_name in self.get_table_names()
-
-    def get_table_names(self):
-        cursor = self.connection.cursor()
-        names = [ x[0] for x in cursor.execute("SELECT name FROM sqlite_schema WHERE type='table'")]
-        cursor.close()
-        return names
-
-    def get_table_column_names(self, table_name):
-        if not self.table_exists(table_name): return []
-        cursor = self.connection.cursor()
-        table_info = cursor.execute("PRAGMA table_info(%s)" % table_name).fetchall()
-        cursor.close()
-        return [x[1] for x in table_info]
-
-    def table_drop(self, table_name):
-        cursor = self.connection.cursor()
-        cursor.execute("DROP TABLE IF EXISTS '%s'" % table_name)
-        cursor.close()
 
     def vacuum(self):
         self.backup()
         cursor = self.connection.cursor()
         cursor.execute("VACUUM")
         cursor.close()
-        
