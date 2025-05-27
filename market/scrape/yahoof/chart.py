@@ -1,25 +1,29 @@
 from .yahoof import YahooF
 import logging, time, os
 from ...database import Database
-from ...utils import storage
+from ...utils import storage, yfinancetest
 from pprint import pp
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, UTC
+from dateutil.relativedelta import relativedelta
+from dateutil import tz
 from multiprocessing import Pool
 import pandas as pd
+import calendar, holidays
 
 class YahooF_Chart(YahooF):
     dbName = 'yahoof_chart'
 
     @staticmethod
-    def get_table_names(table_name):
-        return [table_name]
+    def get_data_names(data_name):
+        if data_name == 'all':
+            return ['chart']
+        return [data_name]
 
     def get_chart(self, data=None):
         def proc_chart(ticker, data):
             while True:
                 try:
-                    info = ticker.info
                     chart = ticker.history(period="10y",auto_adjust=False)
                     data = chart
                 except Exception as e:
@@ -35,9 +39,9 @@ class YahooF_Chart(YahooF):
             return ([True, data, 'ok'])
         return [True, proc_chart, data]
 
-    def __init__(self, key_values=[], table_names=[], forced=False):
+    def __init__(self, key_values=[], data_names=[], update = False, forced=False):
         self.db = Database(self.dbName)
-        if len(key_values) == 0: return
+        if not update: return
         self.logger = logging.getLogger('vault_multi')
         super().__init__()
 
@@ -52,6 +56,17 @@ class YahooF_Chart(YahooF):
         file_handler.setFormatter(formatter)
         yflogger.addHandler(file_handler)
         
+        # Don't update during market hours
+        if not forced:
+            now = datetime.now().astimezone(tz.gettz('America/New_York'))
+            today = now.date()
+            is_market_day = not (today in holidays.US()) and (calendar.weekday(now.year, now.month, now.day) < 5)
+            is_market_hours = now.hour >= 9 and now.hour < 17 # give it a bit of padding
+            is_market_open = is_market_day and is_market_hours
+            if is_market_open:
+                self.logger.info('YahooF:  Chart: market still open, not updating')
+                return
+
         # check what symbols need to be updated
         if forced:
             symbols = sorted(key_values)
@@ -60,13 +75,15 @@ class YahooF_Chart(YahooF):
         if len(symbols) == 0: return
 
         # leave if yfinance limit rate
-        if not self.yfinance_ok(): return
+        if not yfinancetest():
+            self.logger.info('YahooF:  Chart: yfinance limit rate')
+            return
 
         self.logger.info('YahooF:  Chart: update')
         self.logger.info('YahooF:  Chart: symbols processing : %s' % len(symbols))
 
         # backup first
-        self.db.backup()
+        self.logger.info('YahooF:  Chart: %s' % self.db.backup())
 
         exec_list = [
             [symbol, [
@@ -75,120 +92,89 @@ class YahooF_Chart(YahooF):
         self.multi_execs(exec_list)
 
     def update_check(self, symbols):
-        db_status = self.db.table_read('status_db')
+        timestamp_pdt = int(datetime.now().timestamp())
+
+        one_day_ts = timestamp_pdt - (3600 * 24 * 1)
+        three_month_ts = timestamp_pdt - (3600 * 24 * 91)
+        six_months_ts = timestamp_pdt - (3600 * 24 * 182)
+        seven_months_ts = timestamp_pdt - (3600 * 24 * 212)
+
+        status_db = self.db.table_read('status_db', keys=symbols)
+
+        # found and last read more then a day ago
+        one_day = (status_db['found'] > 0) & (status_db['timestamp'] < one_day_ts)
         
-        # found is 1 days check
-        found_update = int(datetime.now().timestamp()) - (3600 * 24 * 1)
-        # not found is 1/2 year check
-        not_found_update = int(datetime.now().timestamp()) - (3600 * 24 * 182)
+        # not found and last read more then 6 months ago and less then 7 months ago (last try)
+        six_months = (status_db['found'] == 0) & ((status_db['timestamp'] > seven_months_ts) & (status_db['timestamp'] < six_months_ts))
+        
+        # if last timestamp is longer then 3 months ago, don't handle it anymore
+        three_month = (status_db['found'] > 0) & (status_db['last_timestamp'] >= three_month_ts)
 
-        update_symbols = []
-        for symbol in symbols:
-            if not symbol in db_status:
-                # never done before, add it
-                update_symbols.append(symbol)
-            else:
-                if db_status[symbol]['found']:
-                    # found before, only do again after 24 h
-                    if db_status[symbol]['timestamp'] <= found_update: update_symbols.append(symbol)
-                else:
-                    # not found before, only try again after 1/2 year
-                    if db_status[symbol]['timestamp'] <= not_found_update: update_symbols.append(symbol)
+        # checked from status_db
+        status_check = set(status_db[(one_day & three_month) ^ six_months].index.tolist())
 
-        return update_symbols
+        # not read
+        not_read = set(symbols).difference(set(status_db.index))
+
+        return sorted(not_read.union(status_check))
 
     def push_api_data(self, symbol, result):
-        timestamp = int(datetime.now().timestamp())
         found = result[0]
-        status_info = {
-            'timestamp': timestamp,
-            'found': found,
-            'message': str(result[2])
-        }
-        self.db.table_write('status_db', {symbol: status_info}, key_name='symbol', method='update')
-        if not found: return
+        message = result[2]
         result = result[1]
-
-        # make unique table name
-        table_name = 'chart_'
-        for c in symbol:
-            if c.isalnum():
-                table_name += c
-            else:
-                table_name += '_'
+        
+        timestamp = int(datetime.now().timestamp())
+        status = {
+            'timestamp': timestamp,
+            'timestamp_str': str(datetime.fromtimestamp(timestamp)),
+            'last_timestamp': 0,
+            'last_timestamp_str': '',
+            'found': found,
+            'message': str(message)
+        }
+        if not found:
+            status = pd.DataFrame([status], index=[symbol])
+            status.index.name = 'symbol'
+            self.db.table_write('status_db', status)
+            return
 
         # take out utc time of indices and change them to timestamps, rename index
         result.index = result.index.tz_localize(None)
         result.index = result.index.astype('int64') // 10**9
         result.index.name = 'timestamp'
-
-        # write table
-        self.db.table_write_df(table_name, result)
+        self.db.table_write_reference(symbol, 'chart', result, replace=True)
         
-        # write table reference
-        self.db.table_write('table_reference', {symbol: {'chart': table_name}}, 'symbol', method='append')
-
-    @staticmethod
-    # def reference_chunk(data):
-    def reference_chunk(data):
-        symbols = data[0]
-        db_name = data[1]
-        db = Database(db_name)
-
-        charts = {}
-        for symbol, symbol_chart_table in symbols.items():
-            chart = db.table_read(symbol_chart_table)
-            df = pd.DataFrame(chart).T
-            df.index = pd.to_datetime(df.index, unit='s')
-            df.sort_index(inplace=True)
-            df.index = df.index.floor('D') # set it to beginning of day
-            df = df.drop('timestamp', axis=1)
-            charts[symbol] = df
-        return charts
-    
+        # write status
+        status['last_timestamp'] = int(result.index[-1])
+        status['last_timestamp_str'] = str(pd.to_datetime(status['last_timestamp'], unit='s'))
+        status = pd.DataFrame([status], index=[symbol])
+        status.index.name = 'symbol'
+        self.db.table_write('status_db', status)
+        
     def cache_data(self, symbols):
-        # get cache info
+        # update cache if needed
         db_storage = 'database/%s' % self.dbName
         db_storage_timestamp = storage.timestamp(db_storage)
+        if db_storage_timestamp != None and self.db.timestamp <= db_storage_timestamp: return
+
+        logger = logging.getLogger('Market')
+        logger.info('YahooF:  Chart: update cache for %s symbols. can not be interrupted with stop text !' % len(symbols))
+
+        # get cach if exists
         charts = {}
         if db_storage_timestamp != None:
             charts = storage.load(db_storage)
         
-        # get get chart symbols that need updated
-        table_reference = pd.DataFrame(self.db.table_read('table_reference')).T
+        # remove all the symbols froom charts that are not in the list
         if len(charts) > 0:
-            status_db = pd.DataFrame(self.db.table_read('status_db')).T
-            status_db = status_db.loc[table_reference.index]
-            status_db = status_db[(status_db['found'] == 1) & (status_db['timestamp'] > db_storage_timestamp)]
-            chart_symbols = sorted(status_db.index)
-        else:
-            chart_symbols = sorted(table_reference.index)
-        if len(chart_symbols) == 0: return
-        
-        logger = logging.getLogger('Market')
-        logger.info('YahooF:  Chart: update cache for %s symbols. can not be interrupted with stop text !' % len(chart_symbols))
+            for symbol in symbols:
+                if symbol in charts: charts.pop(symbol)
+                
+        # retrieve symbol charts from database
+        charts_db = self.db.timeseries_read('chart', keys=symbols)
 
-        # gather symbol chunks based on cpu count
-        cpus = 8
-        symbols_limit = int(len(chart_symbols)/cpus)
-        if len(chart_symbols) % cpus > 0: symbols_limit += 1
-        symbol_chunks = []
-        limit_idx = symbols_limit
-        while limit_idx < (len(chart_symbols)+1):
-            symbol_chunk = chart_symbols[limit_idx-symbols_limit:limit_idx]
-            dict_chunk = {symbol: table_reference.loc[symbol, 'chart'] for symbol in symbol_chunk}
-            symbol_chunks.append((dict_chunk, self.dbName))
-            limit_idx += symbols_limit
-        left_idx = len(chart_symbols) % symbols_limit
-        if left_idx > 0:
-            symbol_chunk = chart_symbols[-left_idx:]
-            dict_chunk = {symbol: table_reference.loc[symbol, 'chart'] for symbol in symbol_chunk}
-            symbol_chunks.append((dict_chunk, self.dbName))
-
-        with Pool(processes=cpus) as pool:
-            results = pool.map(YahooF_Chart.reference_chunk, symbol_chunks)
-            for result in results:
-                charts.update(result)
+        # combine them together
+        charts.update(charts_db)
 
         # backup and write to storage
         logger.info('YahooF:  Chart: backup cache ...')
@@ -196,3 +182,58 @@ class YahooF_Chart(YahooF):
         logger.info('YahooF:  Chart: saving updated cache ...')
         storage.save(charts, db_storage)
         logger.info('YahooF:  Chart: saving cache done')
+
+    def get_charts(self, symbols = [], columns=[]):
+        # get cached or database
+        if len(symbols) == 0 or len(symbols) > 2500:
+            # get cached
+            db_storage = 'database/%s' % self.dbName
+            db_storage_timestamp = storage.timestamp(db_storage)
+            if db_storage_timestamp != None:
+                # we have cached data load it
+                symbols = set(symbols)
+                pop_symbols = len(symbols) > 2500
+                charts = storage.load(db_storage)
+                if len(columns) > 0:
+                    # we have to select columns
+                    columns_set = set(columns)
+                    # get all symbols from cache
+                    charts_symbols = list(charts.keys())
+                    for symbol in charts_symbols:
+                        # go through each chart symbol
+                        # remove the cached ones we don't need
+                        if pop_symbols and symbol not in symbols: charts.pop(symbol)
+                        # just keep columns that we need
+                        found_columns = list(set(charts[symbol].columns).intersection(columns_set))
+                        if len(found_columns) == 0:
+                            # no needed columns found, pop the chart
+                            charts.pop(symbol)
+                        else:
+                            # columns found keep only them and only needed columns
+                            charts[symbol] = charts[symbol][found_columns]
+                return charts
+
+        # get from db
+        return self.db.timeseries_read('chart', keys=symbols, columns=columns)
+
+    def get_vault_data(self, data_name, columns, key_values):
+        if data_name == 'chart':
+            if len(columns) > 0:
+                column_names = [x[0] for x in columns]
+                data = self.get_charts(symbols=key_values, columns=column_names)
+                columns_rename = {x[0]: x[1] for x in columns if x[1] != None}
+                if len(columns_rename) > 0:
+                    for symbol in data:
+                        data[symbol] = data[symbol].rename(columns=columns_rename)
+                return data
+            else:
+                data = self.get_charts(symbols=key_values)
+                return data
+
+    def get_vault_params(self, data_name):
+        if data_name == 'chart':
+            references = sorted(self.db.table_read_df('table_reference')['chart'])
+            for reference in references:
+                column_types = self.db.get_table_info(reference)['columnTypes']
+                column_types.pop('timestamp')
+                if len(column_types) > 8: return(column_types)
