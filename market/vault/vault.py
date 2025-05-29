@@ -1,54 +1,52 @@
 from .catalog import Catalog
 from ..scrape import *
-from ..database import Database
+import logging
+import multiprocessing
 from ..utils import stop_text
 from pprint import pp
-import multiprocessing
-import logging, os
-from datetime import datetime
 
 class Vault():
     def __init__(self):
         self.catalog = Catalog()
         self.logger = logging.getLogger('Market')
-        self.databases = {}
 
-    @staticmethod
     def update_scrapers(log_queue, update_scrapers, key_values, forced):
         logger = logging.getLogger("vault_multi")
         logger.setLevel(logging.INFO)
         queue_handler = logging.handlers.QueueHandler(log_queue)  
         logger.addHandler(queue_handler)  
 
-        for scraper_class, table_names in update_scrapers.items():
-            scraper_class(key_values, table_names=table_names, forced=forced)
+        for scraper_class, data_names in update_scrapers.items():
+            scraper_class(key_values, data_names=data_names, update=True, forced=forced)
 
-    def update(self, catalogs=[], key_values=[], forced=False):
-        # gather scrape classes
-        scraper_classes_data = {Yahoo: [], YahooF: [], FMP: [], Polygon: [], File: [], Finviz: [], Fred: [], Etrade: []}
-        for catalog in catalogs:
-            catalog_data =  self.catalog.get_catalog(catalog)
-            if len(catalog_data) > 0:
-                for set_name, test_set_data in catalog_data['sets'].items():
-                    for scraper_class, scraper_data in test_set_data['scrapes'].items():
-                        for sub_class, scraper_class_data in scraper_classes_data.items():
-                            if issubclass(scraper_class, sub_class):
-                                scraper_class_data.append((scraper_class, list(scraper_data['tables'].keys())))
+    def update(self, catalog, key_values=[], forced=False):
+        if not catalog in self.catalog.catalog: return
+
+        catalog = self.catalog.catalog[catalog]
+
+        # fill un sub classes with scrapes that need to be updated
+        scraper_classes_data = {YahooF: [], FMP: [], Polygon: [], File: [], Finviz: [], Fred: [], Etrade: []}
+        for scraper_class, scraper_data in catalog.items():
+            for sub_class, scraper_class_data in scraper_classes_data.items():
+                if issubclass(scraper_class, sub_class):
+                    scraper_class_data.append((scraper_class, sorted(scraper_data)))
+
+        # create multi chunks for pool
         multi_chunks = []
         log_queue = self.logger.handlers[0].queue
         do_yahoof_chart = False
         for sub_class, scraper_classes in scraper_classes_data.items():
             # creat multi chunk per sub_class
             update_scrapers = {}
-            for scraper_class, table_names in scraper_classes:
+            for scraper_class, data_names in scraper_classes:
                 if scraper_class == YahooF_Chart: do_yahoof_chart = True
                 if not scraper_class in update_scrapers:
                     update_scrapers[scraper_class] = []
-                for table_name in table_names:
-                    update_scrapers[scraper_class] += scraper_class.get_table_names(table_name)
+                for data_name in data_names:
+                    update_scrapers[scraper_class] += scraper_class.get_data_names(data_name)
             if len(update_scrapers) > 0:
                 multi_chunks.append((log_queue, update_scrapers, key_values, forced))
-        
+
         # run scrapes in multi thread
         if len(multi_chunks) == 0: return
         self.logger.info('Run scrapes in %s threads' % (len(multi_chunks)))
@@ -67,135 +65,30 @@ class Vault():
         # cache chart
         if do_yahoof_chart: YahooF_Chart().cache_data(key_values)
 
-    def get_catalog_params(self, catalog):
-        def recurse_catalog(data, params):
-            if isinstance(data, dict):
-                for key, value in data.items():
-                    if key == 'column_settings':
-                        for names in value:
-                            params.append(names[1])
-                    recurse_catalog(value, params)
-        params = []
-        recurse_catalog(self.catalog.get_catalog(catalog), params)
-        return sorted(params)
+    def get_data(self, catalog, key_values=[], update=False, forced=False):
+        if not catalog in self.catalog.catalog: return {}
 
-    # TODO hide with '__'
-    def get_scrape_database(self, scrape_class):
-        if not scrape_class in self.databases:
-            self.databases[scrape_class] = Database(scrape_class.dbName)
-        return self.databases[scrape_class]
+        if update: self.update(catalog, key_values=key_values, forced=forced)
 
-    # TODO hide with '__'
-    def close_scrape_database(self, scrape_class):
-        if scrape_class in self.databases:
-            self.databases.pop(scrape_class)
+        catalog = self.catalog.catalog[catalog]
 
-    # TODO hide with '__'
-    def close_all_scrape_databases(self):
-        scrape_classes = list(self.databases.keys())
-        for scrape_class in scrape_classes:
-            self.close_scrape_database(scrape_class)
+        data = {}
+        for scraper_class, scraper_data in catalog.items():
+            scraper = scraper_class()
+            for data_name, columns in scraper_data.items():
+                data[data_name] = scraper.get_vault_data(data_name, columns, key_values)
+        return data
 
-    def get_data(self, catalogs=[], key_values=[], update=False, forced=False):
-        # TODO: should we have it handle only one catalog instead of list also ?
-        
-        if update: self.update(catalogs, key_values, forced=forced)
+    def get_params(self, catalog):
+        if not catalog in self.catalog.catalog: return {}
 
-        main_data = {}
-        for catalog_name in catalogs:
-            catalog_data =  self.catalog.get_catalog(catalog_name)
+        catalog = self.catalog.catalog[catalog]
 
-            sets_data = {}
-            for set_name , set_data in catalog_data['sets'].items():
-                # handle scrapes
-                scrapes_data = {}
-                for scrape_class, scrape_data in set_data['scrapes'].items():
-                    db = self.get_scrape_database(scrape_class)
-                    scrape_name = db.name
+        params = {}
+        for scraper_class, scraper_data in catalog.items():
+            scraper = scraper_class()
+            for data_name, columns in scraper_data.items():
+                params[data_name] = scraper.get_vault_params(data_name)
 
-                    # handle tables
-                    tables_data = {}
-                    for table_name, table_data in scrape_data['tables'].items():
-                        scrape_table_names = scrape_class.get_table_names(table_name)
-                        for table_name in scrape_table_names:
-                            # handle table names
-                            columns = {}
-                            for column_set in table_data['column_settings']:
-                                search_column = column_set[0]
-                                make_column = column_set[1]
-                                if search_column == 'all':
-                                    for column_name in db.get_table_column_names(table_name):
-                                        if make_column != '':
-                                            newColumnName = make_column + column_name.capitalize()
-                                        else:
-                                            newColumnName = column_name
-                                        if not column_name in columns:
-                                            columns[column_name] = {}
-                                        columns[column_name]['new_name'] = newColumnName
-                                else:
-                                    if not search_column in columns:
-                                        columns[search_column] = {}
-                                    columns[search_column]['new_name'] = make_column
+        return params
 
-                            # get table data
-                            found_data = db.table_read(table_name, key_values, list(columns.keys()))
-                            # skip if no data found
-                            if len(found_data) == 0: continue
-
-                            # make data
-                            if isinstance(found_data, dict):
-                                make_data = {}
-                                for key_value, key_data in found_data.items():
-                                    new_key_data = {}
-                                    for search_column, column_settings in columns.items():
-                                        if not search_column in key_data: continue
-                                        new_key_data[column_settings['new_name']] = key_data[search_column]
-                                    if len(new_key_data) > 0:
-                                        make_data[key_value] = new_key_data
-                            elif isinstance(found_data, list):
-                                make_data = []
-                                for rowData in found_data:
-                                    new_row_data = {}
-                                    for search_column, column_settings in columns.items():
-                                        if not search_column in rowData: continue
-                                        new_row_data[column_settings['new_name']] = rowData[search_column]
-                                    if len(new_row_data) > 0:
-                                        make_data.append(new_row_data)
-                            else:
-                                raise Exception('Database.table_read: Unknown data type %s' % (type(found_data)))
-
-                            if len(make_data) > 0:
-                                tables_data[table_name] = make_data
-                    
-                    # run tables post procs
-                    if 'post_procs' in scrape_data:
-                        for proc_entry in scrape_data['post_procs']:
-                            proc = proc_entry[0]
-                            proc_params = proc_entry[1]
-                            proc_params['db'] = db
-                            tables_data = proc(self, tables_data, **proc_params)
-                            # sets_data[set_name] = proc(self, tables_data, **proc_params)
-                    
-                    scrapes_data[scrape_name] = tables_data
-
-                # run scrapes post procs
-                if 'post_procs' in set_data:
-                    for proc_entry in set_data['post_procs']:
-                        proc = proc_entry[0]
-                        proc_params = proc_entry[1]
-                        scrapes_data = proc(self, scrapes_data, **proc_params)
-                        # sets_data[set_name] = proc(self, tables_data, **proc_params)
-                
-                sets_data[set_name] = scrapes_data
-                
-            # run sets post procs
-            if 'post_procs' in catalog_data:
-                for procEntry in catalog_data['post_procs']:
-                    proc = procEntry[0]
-                    procParams = procEntry[1]
-                    sets_data = proc(self, sets_data, **procParams)
-            
-            main_data[catalog_name] = sets_data
-        
-        self.close_all_scrape_databases()
-        return main_data
