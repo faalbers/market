@@ -191,11 +191,8 @@ class YahooF_Fundamental(YahooF):
         yflogger.addHandler(file_handler)
 
         # check what symbols need to be updated
-        if forced:
-            symbols = sorted(key_values)
-        else:
-            symbols = self.update_check(key_values)
-        if len(symbols) == 0: return
+        updates = self.update_check(key_values, forced=forced)
+        if len(updates['trailing']) == 0: return
 
         # leave if yfinance limit rate
         if not yfinancetest():
@@ -203,40 +200,79 @@ class YahooF_Fundamental(YahooF):
             return
 
         self.logger.info('YahooF:  Fundamental: update')
-        self.logger.info('YahooF:  Fundamental: symbols processing : %s' % len(symbols))
+        self.logger.info('YahooF:  Fundamental: symbols processing : %s' % len(updates['trailing']))
 
         # # backup first
         # self.logger.info('YahooF:  Fundamental: %s' % self.db.backup())
 
-        exec_list = [
-            [symbol, [
+        exec_list = []
+        for symbol in updates['trailing']:
+            exec_entity = [symbol, [
                     self.get_income_stmt_trailing,
                     self.get_cash_flow_trailing,
-                    self.get_income_stmt_yearly,
-                    self.get_cash_flow_yearly,
-                    self.get_balance_sheet_yearly,
-                    self.get_income_stmt_quarterly,
-                    self.get_cash_flow_quarterly,
-                    self.get_balance_sheet_quarterly,
-                ], {'ticker': None, 'data': [False, {}, '']}] for symbol in symbols]
+                ], {'ticker': None, 'data': [False, {}, '']}]
+            if symbol in updates['yearly']:
+                exec_entity[1].append(self.get_income_stmt_yearly)
+                exec_entity[1].append(self.get_cash_flow_yearly)
+                exec_entity[1].append(self.get_balance_sheet_yearly)
+            if symbol in updates['quarterly']:
+                exec_entity[1].append(self.get_income_stmt_quarterly)
+                exec_entity[1].append(self.get_cash_flow_quarterly)
+                exec_entity[1].append(self.get_balance_sheet_quarterly)
+            exec_list.append(exec_entity)
+
         self.multi_execs(exec_list)
 
-    def update_check(self, symbols):
+    def update_check(self, symbols, forced=False):
         status_db = self.db.table_read('status_db', keys=symbols)
 
-        timestamp_pdt = int(datetime.now().timestamp())
-        one_year_plus_ts = timestamp_pdt - (3600 * 24 * 375)
-        two_year_ts = timestamp_pdt - (3600 * 24 * 365 * 2)
+        updates = {}
 
-        update_found = (status_db['found'] > 0) & (status_db['last_timestamp'] < one_year_plus_ts) & (status_db['last_timestamp'] > two_year_ts)
-        print(status_db[update_found])
-        update_found = set(status_db[update_found].index)
+        if forced or status_db.empty:
+            symbols = set(symbols)
+            updates['trailing'] = symbols
+            updates['yearly'] = symbols
+            updates['quarterly'] = symbols
+            return updates
+
         
-        update_new = set(symbols).difference(set(status_db.index))
+        timestamp_pdt = int(datetime.now().timestamp())
+        three_months_plus_ts = timestamp_pdt - (3600 * 24 * 108)
+        half_year_plus_ts = timestamp_pdt - (3600 * 24 * 197)
+        one_year_plus_ts = timestamp_pdt - (3600 * 24 * 375)
+        one_year_half_ts = timestamp_pdt - (3600 * 24 * 548)
+
+        missing_symbols = set(symbols).difference(set(status_db.index))
+
+        found = status_db['found'] > 0
         
-        update = update_found.union(update_new)
-        
-        return sorted(update)
+        update_trailing_quarterly = found & (status_db['last_timestamp_quarterly'] != 0) \
+            & (status_db['last_timestamp_trailing'] < three_months_plus_ts) \
+            & (status_db['last_timestamp_quarterly'] > half_year_plus_ts)
+        update_trailing_yearly = found & (status_db['last_timestamp_yearly'] != 0) \
+            & (status_db['last_timestamp_quarterly'] == 0) \
+            & (status_db['last_timestamp_trailing'] < one_year_plus_ts) \
+            & (status_db['last_timestamp_yearly'] > one_year_half_ts)
+        update_trailing = update_trailing_quarterly | update_trailing_yearly
+        updates['trailing'] = set(status_db[update_trailing].index).union(missing_symbols)
+
+        update_yearly = found & (status_db['last_timestamp_yearly'] != 0) \
+            & (status_db['last_timestamp_yearly'] < one_year_plus_ts) \
+            & (status_db['last_timestamp_yearly'] > one_year_half_ts)
+        updates['yearly'] = set(status_db[update_yearly].index).union(missing_symbols)
+
+        update_quarterly = found & (status_db['last_timestamp_quarterly'] != 0) \
+            & (status_db['last_timestamp_quarterly'] < three_months_plus_ts) \
+            & (status_db['last_timestamp_quarterly'] > half_year_plus_ts)
+        updates['quarterly'] = set(status_db[update_quarterly].index).union(missing_symbols)
+
+        # print(status_db[update_trailing][['last_timestamp_trailing_str', 'last_timestamp_yearly_str', 'last_timestamp_quarterly_str']])
+
+        # print(update_trailing)
+        # print(update_yearly)
+        # print(update_quarterly)
+
+        return updates
     
     def push_api_data(self, symbol, result):
         found = result[0]
@@ -258,9 +294,9 @@ class YahooF_Fundamental(YahooF):
         }
 
         if not found:
-            # status = pd.DataFrame([status], index=[symbol])
-            # status.index.name = 'symbol'
-            # self.db.table_write('status_db', status)
+            status = pd.DataFrame([status], index=[symbol])
+            status.index.name = 'symbol'
+            self.db.table_write('status_db', status)
             return
         
         for period, df in result.items():
@@ -290,10 +326,10 @@ class YahooF_Fundamental(YahooF):
                 status['last_timestamp_quarterly'] = int(df.index[-1])
                 status['last_timestamp_quarterly_str'] = str(pd.to_datetime(status['last_timestamp_quarterly'], unit='s'))
         
-        # # write status
-        # status = pd.DataFrame([status], index=[symbol])
-        # status.index.name = 'symbol'
-        # self.db.table_write('status_db', status)
+        # write status
+        status = pd.DataFrame([status], index=[symbol])
+        status.index.name = 'symbol'
+        self.db.table_write('status_db', status)
 
     def get_vault_data(self, data_name, columns, key_values):
         if data_name == 'trailing':
