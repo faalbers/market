@@ -229,7 +229,7 @@ class YahooF_Info(YahooF):
                     # self.get_recommendations,
                     # self.get_upgrades_downgrades,
                 ], {'ticker': None, 'data': None}] for symbol in symbols]
-        self.multi_execs(exec_list, yfinance_ok=True)
+        self.multi_execs(exec_list)
 
     def update_check(self, symbols):
         timestamp_pdt = int(datetime.now().timestamp())
