@@ -123,7 +123,7 @@ class Database():
             return []
 
         key_name = primary_key_columns[0]
-        key_values = cursor.execute("SELECT %s FROM %s" % (primary_key_columns[0], table_name)).fetchall()
+        key_values = cursor.execute("SELECT [%s] FROM %s" % (primary_key_columns[0], table_name)).fetchall()
         cursor.close()
         return sorted([x[0] for x in key_values])
 
@@ -245,7 +245,7 @@ class Database():
             primary_key_columns = [x[1] for x in table_info if x[5] == 1]
             if index_name in primary_key_columns:
                 # find indices to append or update
-                key_values = cursor.execute("SELECT %s FROM %s" % (index_name, table_name)).fetchall()
+                key_values = cursor.execute("SELECT [%s] FROM '%s'" % (index_name, table_name)).fetchall()
                 key_values = [x[0] for x in key_values]
                 df_append = df[~df.index.isin(key_values)]
                 df_update = df[df.index.isin(key_values)]
@@ -254,7 +254,7 @@ class Database():
                     df_append.reset_index(inplace=True)
                     columns_string = ','.join('[%s]'%x for x in df_append.columns)
                     value_holder_string = ','.join(['?']*len(df_append.columns))
-                    exec_string = "INSERT OR IGNORE INTO %s (%s) VALUES (%s)" % (table_name, columns_string, value_holder_string)
+                    exec_string = "INSERT OR IGNORE INTO '%s' (%s) VALUES (%s)" % (table_name, columns_string, value_holder_string)
                     values = df_append.values.tolist()
                     cursor.executemany(exec_string, values)
                 if not df_update.empty and update:
@@ -265,7 +265,7 @@ class Database():
                         if len(row) == 0: continue
                         columns_string = ','.join('[%s]'%x for x in row.index)
                         value_holder_string = ','.join(['?']*row.shape[0])
-                        exec_string = "UPDATE %s SET (%s) = (%s) WHERE [%s] = '%s'"  % (table_name, columns_string, value_holder_string, index_name, index)
+                        exec_string = "UPDATE '%s' SET (%s) = (%s) WHERE [%s] = '%s'"  % (table_name, columns_string, value_holder_string, index_name, index)
                         # print(tuple(row.tolist()))
                         cursor.execute(exec_string, tuple(row.tolist()))
         else:
@@ -315,7 +315,7 @@ class Database():
         return timeseries
 
     def timeseries_read(self, reference, keys=[], columns=[], index_date=True):
-        return self.table_read_reference(self, reference, keys=keys, columns=columns, index_date=index_date)
+        return self.table_read_reference(reference, keys=keys, columns=columns, index_date=index_date)
 
     def table_read_reference(self, reference, keys=[], columns=[], index_date=False):
         reference_table = self.table_read('table_reference', keys=keys, columns=[reference])[reference]
