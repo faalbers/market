@@ -1,7 +1,7 @@
 from .yahoof import YahooF
 import logging, time
 from ...database import Database
-from ...utils import yfinancetest
+from ...utils import yfinancetest, storage
 from datetime import datetime, UTC
 from pprint import pp
 import pandas as pd
@@ -17,12 +17,18 @@ class YahooF_Fundamental(YahooF):
             return ['fundamental']
         return [data_name]
 
-    def get_balance_sheet(self, data={}):
-        def proc_balance_sheet(ticker, data):
+    def get_income_stmt_trailing(self, data):
+        def proc_income_stmt_trailing(ticker, data):
             while True:
                 try:
-                    data = ticker.balance_sheet
-                    if data.empty: return [False, data, 'balance_sheet is empty']
+                    income_stmt_trailing = ticker.get_income_stmt(freq='trailing')
+                    if income_stmt_trailing.empty:
+                        data[0] = False
+                        data[2] = 'income stmt trailing is empty'
+                    else:
+                        data[0] = True
+                        data[1]['trailing'] = income_stmt_trailing
+                        data[2] = 'ok'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
@@ -31,15 +37,18 @@ class YahooF_Fundamental(YahooF):
                     else:
                         return [False, data, e]
                 break
-            return [True, data, 'ok']
-        return [True, proc_balance_sheet, data]
+            return data
+        # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
+        return [True, proc_income_stmt_trailing, data]
     
-    def get_income_stmt(self, data):
-        def proc_income_stmt(ticker, data):
+    def get_cash_flow_trailing(self, data):
+        def proc_cash_flow_trailing(ticker, data):
             while True:
                 try:
-                    income_stmt = ticker.income_stmt
-                    data[1] = pd.concat([data[1], income_stmt])
+                    cash_flow_trailing = ticker.get_cash_flow(freq='trailing')
+                    if not cash_flow_trailing.empty:
+                        data[1]['trailing'] = pd.concat([data[1]['trailing'], cash_flow_trailing])
+                        data[2] = 'ok'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
@@ -47,15 +56,75 @@ class YahooF_Fundamental(YahooF):
                         continue
                 break
             return data
-        if not data[0]: return [False, proc_income_stmt, data]
-        return [True, proc_income_stmt, data]
+        # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
+        if not data[0]: return [False, proc_cash_flow_trailing, data]
+        return [True, proc_cash_flow_trailing, data]
+    
+    def get_income_stmt_yearly(self, data):
+        def proc_income_stmt_yearly(ticker, data):
+            while True:
+                try:
+                    income_stmt_yearly = ticker.get_income_stmt(freq='yearly')
+                    if not income_stmt_yearly.empty:
+                        data[1]['yearly'] = income_stmt_yearly
+                        data[2] = 'ok'
+                except Exception as e:
+                    if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
+                        self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
+                        time.sleep(60)
+                        continue
+                break
+            return data
+        # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
+        if not data[0]: return [False, proc_income_stmt_yearly, data]
+        return [True, proc_income_stmt_yearly, data]
+    
+    def get_cash_flow_yearly(self, data):
+        def proc_cash_flow_yearly(ticker, data):
+            while True:
+                try:
+                    cash_flow_yearly = ticker.get_cash_flow(freq='yearly')
+                    if not cash_flow_yearly.empty:
+                        data[1]['yearly'] = pd.concat([data[1]['yearly'], cash_flow_yearly])
+                        data[2] = 'ok'
+                except Exception as e:
+                    if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
+                        self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
+                        time.sleep(60)
+                        continue
+                break
+            return data
+        # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
+        if not data[0]: return [False, proc_cash_flow_yearly, data]
+        return [True, proc_cash_flow_yearly, data]
+    
+    def get_balance_sheet_yearly(self, data):
+        def proc_balance_sheet_yearly(ticker, data):
+            while True:
+                try:
+                    balance_sheet_yearly = ticker.get_balance_sheet(freq='yearly')
+                    if not balance_sheet_yearly.empty:
+                        data[1]['yearly'] = pd.concat([data[1]['yearly'], balance_sheet_yearly])
+                        data[2] = 'ok'
+                except Exception as e:
+                    if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
+                        self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
+                        time.sleep(60)
+                        continue
+                break
+            return data
+        # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
+        if not data[0]: return [False, proc_balance_sheet_yearly, data]
+        return [True, proc_balance_sheet_yearly, data]
 
-    def get_cash_flow(self, data):
-        def proc_cash_flow(ticker, data):
+    def get_income_stmt_quarterly(self, data):
+        def proc_income_stmt_quarterly(ticker, data):
             while True:
                 try:
-                    cash_flow = ticker.cash_flow
-                    data[1] = pd.concat([data[1], cash_flow])
+                    income_stmt_quarterly = ticker.get_income_stmt(freq='quarterly')
+                    if not income_stmt_quarterly.empty:
+                        data[1]['quarterly'] = income_stmt_quarterly
+                        data[2] = 'ok'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
@@ -63,8 +132,47 @@ class YahooF_Fundamental(YahooF):
                         continue
                 break
             return data
-        if not data[0]: return [False, proc_cash_flow, data]
-        return [True, proc_cash_flow, data]
+        # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
+        if not data[0]: return [False, proc_income_stmt_quarterly, data]
+        return [True, proc_income_stmt_quarterly, data]
+    
+    def get_cash_flow_quarterly(self, data):
+        def proc_cash_flow_quarterly(ticker, data):
+            while True:
+                try:
+                    cash_flow_quarterly = ticker.get_cash_flow(freq='quarterly')
+                    if not cash_flow_quarterly.empty:
+                        data[1]['quarterly'] = pd.concat([data[1]['quarterly'], cash_flow_quarterly])
+                        data[2] = 'ok'
+                except Exception as e:
+                    if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
+                        self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
+                        time.sleep(60)
+                        continue
+                break
+            return data
+        # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
+        if not data[0]: return [False, proc_cash_flow_quarterly, data]
+        return [True, proc_cash_flow_quarterly, data]
+    
+    def get_balance_sheet_quarterly(self, data):
+        def proc_balance_sheet_quarterly(ticker, data):
+            while True:
+                try:
+                    balance_sheet_quarterly = ticker.get_balance_sheet(freq='quarterly')
+                    if not balance_sheet_quarterly.empty:
+                        data[1]['quarterly'] = pd.concat([data[1]['quarterly'], balance_sheet_quarterly])
+                        data[2] = 'ok'
+                except Exception as e:
+                    if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
+                        self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
+                        time.sleep(60)
+                        continue
+                break
+            return data
+        # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
+        if not data[0]: return [False, proc_balance_sheet_quarterly, data]
+        return [True, proc_balance_sheet_quarterly, data]
 
     def __init__(self, key_values=[], data_names=[], update = False, forced=False):
         self.db = Database(self.dbName)
@@ -97,16 +205,21 @@ class YahooF_Fundamental(YahooF):
         self.logger.info('YahooF:  Fundamental: update')
         self.logger.info('YahooF:  Fundamental: symbols processing : %s' % len(symbols))
 
-        # backup first
-        self.logger.info('YahooF:  Fundamental: %s' % self.db.backup())
+        # # backup first
+        # self.logger.info('YahooF:  Fundamental: %s' % self.db.backup())
 
         exec_list = [
             [symbol, [
-                    self.get_balance_sheet,
-                    self.get_income_stmt,
-                    self.get_cash_flow,
-                ], {'ticker': None, 'data': {}}] for symbol in symbols]
-        self.multi_execs(exec_list, yfinance_ok=True)
+                    self.get_income_stmt_trailing,
+                    self.get_cash_flow_trailing,
+                    self.get_income_stmt_yearly,
+                    self.get_cash_flow_yearly,
+                    self.get_balance_sheet_yearly,
+                    self.get_income_stmt_quarterly,
+                    self.get_cash_flow_quarterly,
+                    self.get_balance_sheet_quarterly,
+                ], {'ticker': None, 'data': [False, {}, '']}] for symbol in symbols]
+        self.multi_execs(exec_list)
 
     def update_check(self, symbols):
         status_db = self.db.table_read('status_db', keys=symbols)
@@ -116,6 +229,7 @@ class YahooF_Fundamental(YahooF):
         two_year_ts = timestamp_pdt - (3600 * 24 * 365 * 2)
 
         update_found = (status_db['found'] > 0) & (status_db['last_timestamp'] < one_year_plus_ts) & (status_db['last_timestamp'] > two_year_ts)
+        print(status_db[update_found])
         update_found = set(status_db[update_found].index)
         
         update_new = set(symbols).difference(set(status_db.index))
@@ -129,50 +243,93 @@ class YahooF_Fundamental(YahooF):
         message = result[2]
         result = result[1]
 
-
         timestamp = int(datetime.now().timestamp())
         status = {
             'timestamp': timestamp,
             'timestamp_str': str(datetime.fromtimestamp(timestamp)),
-            'last_timestamp': 0,
-            'last_timestamp_str': '',
+            'last_timestamp_trailing': 0,
+            'last_timestamp_trailing_str': '',
+            'last_timestamp_yearly': 0,
+            'last_timestamp_yearly_str': '',
+            'last_timestamp_quarterly': 0,
+            'last_timestamp_quarterly_str': '',
             'found': found,
             'message': str(message)
         }
+
         if not found:
-            status = pd.DataFrame([status], index=[symbol])
-            status.index.name = 'symbol'
-            self.db.table_write('status_db', status)
+            # status = pd.DataFrame([status], index=[symbol])
+            # status.index.name = 'symbol'
+            # self.db.table_write('status_db', status)
             return
         
-        result = result.T.infer_objects()
+        for period, df in result.items():
+            print(symbol, period)
+            df = df.T.infer_objects()
+            df.index = df.index.tz_localize(None)
+            df.index = df.index.astype('int64') // 10**9
+            df.index.name = 'timestamp'
+            df.sort_index(inplace=True)
+            df = df.copy() # to avoid 'DataFrame is highly fragmented'
+            if period == 'trailing':
+                if df.shape[0] > 1:
+                    df.iloc[-1] = df.sum()
+                    df = df.iloc[-1:]
+                df.reset_index(inplace=True)
+                df.index = [symbol]
+                df.index.name = 'symbol'
+                self.db.table_write('trailing', df)
+                status['last_timestamp_trailing'] = int(df.iloc[0]['timestamp'])
+                status['last_timestamp_trailing_str'] = str(pd.to_datetime(status['last_timestamp_trailing'], unit='s'))
+            elif period == 'yearly':
+                self.db.table_write_reference(symbol, 'yearly', df)
+                status['last_timestamp_yearly'] = int(df.index[-1])
+                status['last_timestamp_yearly_str'] = str(pd.to_datetime(status['last_timestamp_yearly'], unit='s'))
+            elif period == 'quarterly':
+                self.db.table_write_reference(symbol, 'quarterly', df)
+                status['last_timestamp_quarterly'] = int(df.index[-1])
+                status['last_timestamp_quarterly_str'] = str(pd.to_datetime(status['last_timestamp_quarterly'], unit='s'))
         
-        # take out utc time of indices and change them to timestamps, rename index
-        result.index = result.index.tz_localize(None)
-        result.index = result.index.astype('int64') // 10**9
-        result.index.name = 'timestamp'
-        result.sort_index(inplace=True)
-        self.db.table_write_reference(symbol, 'fundamental', result, replace=True)
-
-        # write status
-        status['last_timestamp'] = int(result.index[-1])
-        status['last_timestamp_str'] = str(pd.to_datetime(status['last_timestamp'], unit='s'))
-        status = pd.DataFrame([status], index=[symbol])
-        status.index.name = 'symbol'
-        self.db.table_write('status_db', status)
+        # # write status
+        # status = pd.DataFrame([status], index=[symbol])
+        # status.index.name = 'symbol'
+        # self.db.table_write('status_db', status)
 
     def get_vault_data(self, data_name, columns, key_values):
-        if data_name == 'fundamental':
+        if data_name == 'trailing':
             if len(columns) > 0:
                 column_names = [x[0] for x in columns]
-                data = self.db.timeseries_read('fundamental', keys=key_values, columns=column_names)
+                data = self.db.table_read('trailing', keys=key_values, columns=column_names)
+                columns_rename = {x[0]: x[1] for x in columns if x[1] != None}
+                if len(columns_rename) > 0:
+                    data = data.rename(columns=columns_rename)
+                return data
+            else:
+                data = self.db.table_read('trailing', keys=key_values)
+                return data
+        elif data_name == 'yearly':
+            if len(columns) > 0:
+                column_names = [x[0] for x in columns]
+                data = self.db.timeseries_read('yearly', keys=key_values, columns=column_names)
                 columns_rename = {x[0]: x[1] for x in columns if x[1] != None}
                 if len(columns_rename) > 0:
                     for symbol in data:
                         data[symbol] = data[symbol].rename(columns=columns_rename)
                 return data
             else:
-                data = self.db.timeseries_read('fundamental', keys=key_values)
+                data = self.db.timeseries_read('yearly', keys=key_values)
+                return data
+        elif data_name == 'quarterly':
+            if len(columns) > 0:
+                column_names = [x[0] for x in columns]
+                data = self.db.timeseries_read('quarterly', keys=key_values, columns=column_names)
+                columns_rename = {x[0]: x[1] for x in columns if x[1] != None}
+                if len(columns_rename) > 0:
+                    for symbol in data:
+                        data[symbol] = data[symbol].rename(columns=columns_rename)
+                return data
+            else:
+                data = self.db.timeseries_read('quarterly', keys=key_values)
                 return data
 
     def get_vault_params(self, data_name):
