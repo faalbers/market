@@ -8,9 +8,9 @@ class Catalog():
         'update': {
             # FMP_Stocklist: {'stocklist': [],},
             # Polygon_Tickers: {'tickers': []},
-            # YahooF_Info: {'info': [],},
+            YahooF_Info: {'info': [],},
             # YahooF_Chart: {'chart': [],},
-            YahooF_Fundamental: {'fundamental': [],},
+            # YahooF_Fundamental: {'fundamental': [],},
             
             # File_Files: {'mic': [], 'country': [],},
             # Polygon_News: {'news_polygon': [],},
@@ -60,8 +60,25 @@ class Catalog():
             },
         },
         'symbols': {
-            FMP_Stocklist: {'stocklist': []},
-            Polygon_Tickers: {'tickers': []},
+            FMP_Stocklist: {
+                'stocklist': [
+                    ['name', 'name'],
+                    ['type', 'type'],
+                    # ['exchangeShortName', 'exchange'],
+                ]},
+            Polygon_Tickers: {
+                'tickers': [
+                    ['name', 'name_tickers'],
+                    ['type', 'sub_type'],
+                    # ['primary_exchange', 'exchange'],
+                    ['market', 'market'],
+                ]},
+            YahooF_Info: {
+                'info': [
+                    ['shortName', 'name_short'],
+                    ['quoteType', 'type'],
+                ],
+            },
         },
         'us_symbols': {
             FMP_Stocklist: {

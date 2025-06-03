@@ -238,6 +238,7 @@ class YahooF_Info(YahooF):
         half_year_ts = timestamp_pdt - (3600 * 24 * 182)
 
         status_db = self.db.table_read('status_db', keys=symbols)
+        if status_db.shape[0] == 0: return sorted(symbols)
 
         # found and last read more then one month ago
         one_month = (status_db['found'] > 0) & (status_db['timestamp'] < one_month_ts)

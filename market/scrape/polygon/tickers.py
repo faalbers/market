@@ -78,6 +78,7 @@ class Polygon_Tickers(Polygon):
             if entry['market'] == 'indices':
                 # handle indices
                 symbol = symbol.replace('I:', '^')
+                entry['type'] = 'IX'
             if len(symbol) > 2 and symbol[-2] == '.':
                 if symbol[-1] <= 'C':
                     # handle class ticker
