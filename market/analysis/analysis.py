@@ -1,11 +1,10 @@
 from ..tickers import Tickers
-from ..vault import Vault
+# from ..vault import Vault
 from ..viz import Viz
 import pandas as pd
 import numpy as np
 from pprint import pp
 from ..utils import storage
-from .gicsm import GICSM
 from datetime import datetime
 import time
 
@@ -24,13 +23,11 @@ class Analysis():
                 return Analysis.__get_param(data[key], new_param)
         return None
 
-    def __init__(self, tickers):
+    def __init__(self, tickers, update=False, forced=False):
         self.tickers = tickers
-        self.vault = Vault()
         self.viz = Viz()
-        self.__get_data()
+        self.__get_data(update, forced)
         # self.benchmarks = Tickers(['SPY', 'QQQ'])
-        # self.vault = Vault()
 
     def test(self, symbol, date):
         if not symbol in self.symbols: return
@@ -311,8 +308,58 @@ class Analysis():
     #         sectors_industries[symbol_data['sector']].add(symbol_data['industry'])
     #     return sectors_industries
 
-    def __get_data(self):
-        analysis = self.tickers.get_analysis()
+    def __get_data(self, update, forced):
+        # get analysis data
+        analysis_data = self.tickers.get_analysis(update=update, forced=forced)
+
+        # merge into one dataframe
+        self.info = pd.merge(analysis_data['info'], analysis_data['quote'], left_index=True, right_index=True, how='left')
+
+        # drop the ones with a dot in the symbol name
+        self.info = self.info[~self.info.index.str.contains('.', regex=False)]
+
+        # only get the ones included in equity_types
+        self.info = self.info[self.info['type'].isin(self.equity_types)]
+
+        # get fundamental
+        self.fundamental = analysis_data['fundamental']
+        print(len(self.fundamental))
+        
+        # get charts
+        self.charts = analysis_data['chart']
+        print(len(self.charts))
+        # print(self.charts['AAPL'])
+        pp(self.charts)
+
+        # get secto charts
+        sectors = {
+            'XLV': 'Healthcare',
+            'XLB': 'Basic Materials',
+            'XLK': 'Technology',
+            'XLF': 'Financial Services',
+            'XLI': 'Industrials',
+            'XLRE': 'Real Estate',
+            'XLC': 'Communication Services',
+            'XLU': 'Utilities',
+            'XLE': 'Energy',
+            'XLP': 'Consumer Defensive',
+            'XLY': 'Consumer Cyclical',
+        }
+        sector_indices = list(sectors.keys()) + ['SPY']
+        sector_tickers = Tickers(sector_indices)
+        sector_charts = sector_tickers.get_charts(update=update, forced=forced)['chart']
+        self.sector_indices = sector_charts['SPY'][['close']]
+        self.sector_indices = self.sector_indices.rename(columns={'close': 'S&P500'})
+        for sector_symbol, sector in sectors.items():
+            if not sector_symbol in sector_charts:
+                raise Exception('sector ticker not found: %s' % sector_symbol)
+            # print(self.sector_indices)
+            # print(sector_charts[sector_symbol]['close'])
+            self.sector_indices = self.sector_indices.join(sector_charts[sector_symbol]['close'])
+            self.sector_indices = self.sector_indices.rename(columns={'close': sector})
+        pp(self.sector_indices.round(2))
+
+        return
         self.symbols = {}
         for symbol, symbol_data in analysis.items():
             # skip non us market symbols

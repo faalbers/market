@@ -13,14 +13,15 @@ class Fred():
     dbName = 'fred'
 
     @staticmethod
-    def get_table_names(table_name):
-        if table_name == 'all':
+    def get_data_names(data_name):
+        if data_name == 'all':
             return ['fred']
-        return [table_name]
+        return [data_name]
 
-    def __init__(self, key_values=[], table_names=[], forced=False):
-        self.logger = logging.getLogger('vault_multi')
+    def __init__(self, key_values=[], data_names=[], update = False, forced=False):
         self.db = Database(self.dbName)
+        if not update: return
+        self.logger = logging.getLogger('vault_multi')
         self.fred = Fred_API(api_key=KEYS['FRED']['KEY'])
 
         observation_start = '1971-01-01'

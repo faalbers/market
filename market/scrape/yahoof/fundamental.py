@@ -202,8 +202,8 @@ class YahooF_Fundamental(YahooF):
         self.logger.info('YahooF:  Fundamental: update')
         self.logger.info('YahooF:  Fundamental: symbols processing : %s' % len(updates['trailing']))
 
-        # # backup first
-        # self.logger.info('YahooF:  Fundamental: %s' % self.db.backup())
+        # backup first
+        self.logger.info('YahooF:  Fundamental: %s' % self.db.backup())
 
         exec_list = []
         for symbol in updates['trailing']:

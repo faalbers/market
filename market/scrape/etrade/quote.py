@@ -9,15 +9,16 @@ class Etrade_Quote(Etrade):
     dbName = 'etrade_quote'
 
     @staticmethod
-    def get_table_names(table_name):
-        if table_name == 'all':
+    def get_data_names(data_name):
+        if data_name == 'all':
             return ['quote']
-        return [table_name]
+        return [data_name]
 
-    def __init__(self, key_values=[], table_names=[], forced=False):
-        self.logger = logging.getLogger('vault_multi')
-        super().__init__()
+    def __init__(self, key_values=[], data_names=[], update = False, forced=False):
         self.db = Database(self.dbName)
+        super().__init__()
+        if not update: return
+        self.logger = logging.getLogger('vault_multi')
 
         # if self.session == None:
         #     self.logger.info('Etrade:  Quote: Session did no succeed')
@@ -185,3 +186,22 @@ class Etrade_Quote(Etrade):
         
         result['timestamp'] = timestamp
         self.db.table_write('quote', {symbol: result}, key_name='symbol', method='replace')
+
+    def get_vault_data(self, data_name, columns, key_values):
+        if data_name == 'quote':
+            if len(columns) > 0:
+                column_names = [x[0] for x in columns]
+                # data = self.db.table_read_df('quote', columns=column_names, key_values=key_values, index_column='symbol')
+                data = self.db.table_read('quote', keys=key_values, columns=column_names)
+                data = data.rename(columns={x[0]: x[1] for x in columns})
+                return data
+            else:
+                # data = self.db.table_read_df('quote', key_values=key_values, index_column='symbol')
+                data = self.db.table_read('quote', keys=key_values)
+                return data
+    
+    def get_vault_params(self, data_name):
+        if data_name == 'quote':
+            column_types = self.db.get_table_info('quote')['columnTypes']
+            column_types.pop('symbol')
+            return column_types
