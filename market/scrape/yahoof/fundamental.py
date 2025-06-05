@@ -318,11 +318,11 @@ class YahooF_Fundamental(YahooF):
                 status['last_timestamp_trailing'] = int(df.iloc[0]['timestamp'])
                 status['last_timestamp_trailing_str'] = str(pd.to_datetime(status['last_timestamp_trailing'], unit='s'))
             elif period == 'yearly':
-                self.db.table_write_reference(symbol, 'yearly', df)
+                self.db.table_write_reference(symbol, 'yearly', df, update=False)
                 status['last_timestamp_yearly'] = int(df.index[-1])
                 status['last_timestamp_yearly_str'] = str(pd.to_datetime(status['last_timestamp_yearly'], unit='s'))
             elif period == 'quarterly':
-                self.db.table_write_reference(symbol, 'quarterly', df)
+                self.db.table_write_reference(symbol, 'quarterly', df, update=False)
                 status['last_timestamp_quarterly'] = int(df.index[-1])
                 status['last_timestamp_quarterly_str'] = str(pd.to_datetime(status['last_timestamp_quarterly'], unit='s'))
         
