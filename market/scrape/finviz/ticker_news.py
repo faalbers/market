@@ -22,116 +22,79 @@ class Finviz_Ticker_News(Finviz):
         super().__init__()
 
         # check what symbols need to be updated
-        if forced:
-            symbols = sorted(key_values)
-        else:
-            symbols = self.update_check(key_values)
+        symbols = self.update_check(key_values, forced=forced)
         if len(symbols) == 0: return
-        return
         
         self.logger.info('Finviz:  Finviz_Ticker_News update')
 
-        # # backup first
-        # self.db.backup()
-
+        # backup first
+        self.logger.info('Finviz:  Finviz_Ticker_News: %s' % self.db.backup())
 
         symbols_done = 0
+        found = 0
         for symbol in symbols:
             if (symbols_done % 100) == 0:
                 self.db.commit()
-                self.logger.info('Finviz:  symbols still to do: %s' % (len(key_values) - symbols_done))
-            self.request_news(symbol)
+                self.logger.info('Finviz:  symbols still to do and found so far: (%s / %s)' % (len(symbols) - symbols_done, found))
+            if self.request_news(symbol): found += 1
             symbols_done += 1
             if stop_text():
                 self.logger.info('Finviz:  manually stopped request')
                 self.logger.info('Finviz:  symbols done       : %s' % symbols_done)
                 self.db.commit()
                 break
+        self.logger.info('Finviz:  total symbols found: %s' % (found))
         self.logger.info('Finviz:  Finviz_Ticker_News update done')
 
-    def update_check(self, symbols):
-        db_status = self.db.table_read('status_db')
-        print(db_status)
+    def update_check(self, symbols, forced=False):
+        status_db = self.db.table_read('status_db', keys=symbols)
+
+        if forced or status_db.empty:
+            return sorted(symbols)
 
         timestamp_pdt = int(datetime.now().timestamp())
+        one_day_ts = timestamp_pdt - (3600 * 24)
 
-        
-        
-        return symbols
+        missing_symbols = set(symbols).difference(set(status_db.index))
 
-        now_utc = datetime.now(UTC)
+        update = status_db['timestamp'] < one_day_ts
 
-        update_symbols = []
-        for symbol in symbols:
-            if not symbol in db_status:
-                # never done before, add it
-                update_symbols.append(symbol)
-            else:
-                pass
-                # if db_status[symbol]['found']:
-                #     # found before, only do again after 24 h
-                #     if db_status[symbol]['timestamp'] <= int(now_utc.timestamp() - (3600 * 24)): update_symbols.append(symbol)
-                # else:
-                #     # not found before, only try again after 1/2 year
-                #     if db_status[symbol]['timestamp'] <= int(now_utc.timestamp() - (3600 * 24 * 182)): update_symbols.append(symbol)
-        
+        update_symbols = set(status_db[update].index).union(missing_symbols)
+
         return sorted(update_symbols)
 
-    def pushAPIData(self, symbol, result):
-        print('hello')
-        found = result[0]
+    def push_api_data(self, symbol, result):
+        symbol = symbol.upper()
+
+        found = not result.empty
+
+        if found:
+            result.sort_values(by='Date', inplace=True)
+            result.reset_index(drop=True, inplace=True)
+            result['Date'] = result['Date'].apply(lambda x: int(x.timestamp()))
+            if not result['Date'].is_unique:
+                # add a second to not unique timestamps
+                grouped_df = result.groupby('Date')
+                for timestamp, group in grouped_df.groups.items():
+                    if group.shape[0] > 1:
+                        for index in group[1:]:
+                            timestamp += 1
+                            result.loc[index, 'Date'] = timestamp
+            result.set_index('Date', verify_integrity=True, inplace=True)
+            result.index.name = 'timestamp'
+            self.db.table_write_reference(symbol, 'news', result, update=False)
+
+        # update last time we checked on status
         timestamp = int(datetime.now().timestamp())
-        status_info = {
+        status = {
             'timestamp': timestamp,
             'timestamp_str': str(datetime.fromtimestamp(timestamp)),
-            'last_timestamp': 0,
-            'last_timestamp_str': '',
-            'found': found,
         }
-        if not found:
-            status_info = pd.DataFrame({symbol: status_info}).T
-            status_info.index.name = 'symbol'
-            self.db.table_write('status_db', status_info)
-            return
-        news_df = result[1]
-        symbol = symbol.upper()
-        news_df.sort_values(by='Date', inplace=True)
-        news_df.reset_index(drop=True, inplace=True)
-        news_df['Date'] = news_df['Date'].apply(lambda x: int(x.timestamp()))
-        if not news_df['Date'].is_unique:
-            # add a second to not unique timestamps
-            grouped_df = news_df.groupby('Date')
-            for timestamp, group in grouped_df.groups.items():
-                if group.shape[0] > 1:
-                    for index in group[1:]:
-                        timestamp += 1
-                        news_df.loc[index, 'Date'] = timestamp
-        news_df.set_index('Date', verify_integrity=True, inplace=True)
-        news_df.index.name = 'timestamp'
+        status = pd.DataFrame([status], index=[symbol])
+        status.index.name = 'symbol'
+        self.db.table_write('status_db', status)
 
-        tableName = 'news_'
-        for c in symbol:
-            if c.isalnum():
-                tableName += c
-            else:
-                tableName += '_'
-        
-        # # write table
-        # self.db.table_write(tableName, news_df, update=False)
-        
-        # # create reference
-        # table_reference = pd.DataFrame({symbol: {'news': tableName}}).T
-        # table_reference.index.name = 'symbol'
-        # self.db.table_write('table_reference', table_reference)
-
-        # update status
-        print('bliep')
-        status_info['last_timestamp'] = news_df.index[-1]
-        status_info['last_timestamp_str'] = str(pd.to_datetime(status_info['last_timestamp'], unit='s'))
-        status_info = pd.DataFrame({symbol: status_info}).T
-        status_info.index.name = 'symbol'
-        print(status_info)
-        self.db.table_write('status_db', status_info)
+        return found
 
     def get_vault_data(self, data_name, columns, key_values):
         if data_name == 'news_finviz':

@@ -17,11 +17,9 @@ class Finviz():
             news = ticker.ticker_news()
         except Exception as e:
             # self.logger.error("Finviz:  ticker news error: %s: %s" % (symbol, e))
-            return (False, pd.DataFrame())
-        return (True, news)
+            return pd.DataFrame()
+        return news
     
     def request_news(self, symbol):
-        symbol_news = self.get_news_limited(symbol)
-        if len(symbol_news) > 0:
-            self.pushAPIData(symbol, symbol_news)
+        return self.push_api_data(symbol, self.get_news_limited(symbol))
 
