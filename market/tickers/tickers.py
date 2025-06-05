@@ -77,6 +77,29 @@ class Tickers():
             self.__symbols = self.get_symbols_info(types)
 
     def update(self, forced=False):
+        updates = []
+
+        # update data
+        updates.append(['update_data', [], forced])
+
+        # update symbols data
+        symbols_all = self.__symbols.index.to_list()
+        if len(symbols_all) > 0:
+            updates.append(['update_symbols_all', symbols_all, forced])
+
+        # update info
+        symbols_info = self.get_symbols_info(['EQUITY', 'ETF', 'INDEX', 'MUTUALFUND']).index.to_list()
+        if len(symbols_info) > 0:
+            updates.append(['update_symbols_info', symbols_info, forced])
+
+        # update equity
+        symbols_equity = self.get_symbols_info(['EQUITY']).index.to_list()
+        if len(symbols_equity) > 0:
+            updates.append(['update_symbols_equity', symbols_equity, forced])
+
+        self.vault.update(updates)
+    
+    def update_old(self, forced=False):
         self.vault.update('update', key_values=self.__symbols.index.to_list(), forced=forced)
 
     def add_symbols(self, symbols):
@@ -98,13 +121,13 @@ class Tickers():
         return sorted(types_all)
     
     def get_symbols_info(self, types=[]):
+        if self.__symbols.empty: return self.__symbols
         if len(types) > 0:
             found = pd.Series(dtype='bool', index=self.__symbols.index, data=False)
             for type_code in types:
                 splits = type_code.split('_')
                 all_types = False
                 if splits[0] == '*': all_types = True
-                print(all_types)
                 if len(splits) == 1:
                     if all_types:
                         found = pd.Series(dtype='bool', index=self.__symbols.index, data=True)

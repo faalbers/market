@@ -8,7 +8,7 @@ class Catalog():
         'update': {
             # FMP_Stocklist: {'stocklist': [],},
             # Polygon_Tickers: {'tickers': []},
-            YahooF_Info: {'info': [],},
+            # YahooF_Info: {'info': [],},
             # YahooF_Chart: {'chart': [],},
             # YahooF_Fundamental: {'fundamental': [],},
             
@@ -17,6 +17,24 @@ class Catalog():
             # Finviz_Ticker_News: {'news_finviz': [],},
             # YahooF_Fundamental_Quarterly: {'fundamental_quarterly': [],},
 
+        },
+        'update_data': {
+            # FMP_Stocklist: {'stocklist': [],},
+            # Polygon_Tickers: {'tickers': []},
+            # File_Files: {'mic': [], 'country': [],},
+            # Polygon_News: {'news_polygon': [],},
+        },
+        'update_symbols_all': {
+            # YahooF_Info: {'info': [],},
+        },
+        'update_symbols_info': {
+            # Finviz_Ticker_News: {'news_finviz': [],},
+            
+            # YahooF_Chart: {'chart': [],},
+            # Etrade_Quote: {'quote': [],},
+        },
+        'update_symbols_equity': {
+            # YahooF_Fundamental: {'fundamental': [],},
         },
         'profile': {
             YahooF_Info: {
