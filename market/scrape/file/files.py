@@ -26,7 +26,6 @@ class File_Files(File):
     
     def csv_preprocess(self, data, file_name):
         if file_name.startswith('SPDRS'):
-            print(file_name)
             data.columns = data.iloc[0]
             data = data.iloc[1:]
         return data

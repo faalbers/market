@@ -100,6 +100,7 @@ class YahooF_Chart(YahooF):
         seven_months_ts = timestamp_pdt - (3600 * 24 * 212)
 
         status_db = self.db.table_read('status_db', keys=symbols)
+        if status_db.shape[0] == 0: return sorted(symbols)
 
         # found and last read more then a day ago
         one_day = (status_db['found'] > 0) & (status_db['timestamp'] < one_day_ts)

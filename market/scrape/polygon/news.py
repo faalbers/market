@@ -41,8 +41,8 @@ class Polygon_News(Polygon):
         else:
             self.logger.info('Polygon: Polygon_News update starting from beginning')
 
-        # # backup first
-        # self.logger.info('Polygon: Polygon_News: %s' % self.db.backup())
+        # backup first
+        self.logger.info('Polygon: Polygon_News: %s' % self.db.backup())
 
         self.last_published_utc = None
         self.request(request_arguments, self.push_news_data)
