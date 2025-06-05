@@ -8,7 +8,7 @@ class Database():
     sql_types = {
         np.int64:  'INTEGER',
         np.float64:  'REAL',
-        np.bool:  'BOOLEAN',
+        np.bool_:  'BOOLEAN',
         # int:  'INTEGER',
         # float:  'REAL',
         # bool:  'BOOLEAN',
@@ -332,7 +332,7 @@ class Database():
         
         # get with multi process
         # gather symbol chunks based on cpu count
-        cpus = 6
+        cpus = 8
         keys = list(reference_table.index)
         keys_limit = int(len(keys)/cpus)
         if len(keys) % cpus > 0: keys_limit += 1
