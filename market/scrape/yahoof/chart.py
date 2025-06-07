@@ -94,7 +94,7 @@ class YahooF_Chart(YahooF):
     def update_check(self, symbols):
         timestamp_pdt = int(datetime.now().timestamp())
 
-        one_day_ts = timestamp_pdt - (3600 * 24 * 1)
+        five_days_ts = timestamp_pdt - (3600 * 24 * 5)
         three_month_ts = timestamp_pdt - (3600 * 24 * 91)
         six_months_ts = timestamp_pdt - (3600 * 24 * 182)
         seven_months_ts = timestamp_pdt - (3600 * 24 * 212)
@@ -105,7 +105,7 @@ class YahooF_Chart(YahooF):
         found = status_db['found'] > 0
 
         # found and last read more then a day ago
-        one_day = found & (status_db['timestamp'] < one_day_ts)
+        five_days = found & (status_db['timestamp'] < five_days_ts)
         
         # not found and last read more then 6 months ago and less then 7 months ago (last try)
         six_months = ~found & ((status_db['timestamp'] > seven_months_ts) & (status_db['timestamp'] < six_months_ts))
@@ -114,7 +114,7 @@ class YahooF_Chart(YahooF):
         three_month = found & (status_db['last_timestamp'] >= three_month_ts)
 
         # checked from status_db
-        status_check = set(status_db[(one_day & three_month) ^ six_months].index.tolist())
+        status_check = set(status_db[(five_days & three_month) ^ six_months].index.tolist())
 
         # not read
         not_read = set(symbols).difference(set(status_db.index))

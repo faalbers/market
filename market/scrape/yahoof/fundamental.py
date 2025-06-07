@@ -237,7 +237,7 @@ class YahooF_Fundamental(YahooF):
 
         
         timestamp_pdt = int(datetime.now().timestamp())
-        one_day_ts = timestamp_pdt - (3600 * 24)
+        five_days_ts = timestamp_pdt - (3600 * 24 * 5)
         three_months_plus_ts = timestamp_pdt - (3600 * 24 * 108)
         half_year_plus_ts = timestamp_pdt - (3600 * 24 * 197)
         one_year_plus_ts = timestamp_pdt - (3600 * 24 * 375)
@@ -247,7 +247,7 @@ class YahooF_Fundamental(YahooF):
 
         found = status_db['found'] > 0
 
-        update_one_day = found & (status_db['timestamp'] < one_day_ts)
+        update_five_days = found & (status_db['timestamp'] < five_days_ts)
         
         update_trailing_quarterly = found & (status_db['last_timestamp_quarterly'] != 0) \
             & (status_db['last_timestamp_trailing'] < three_months_plus_ts) \
@@ -256,19 +256,19 @@ class YahooF_Fundamental(YahooF):
             & (status_db['last_timestamp_quarterly'] == 0) \
             & (status_db['last_timestamp_trailing'] < one_year_plus_ts) \
             & (status_db['last_timestamp_yearly'] > one_year_half_ts)
-        update_trailing = update_one_day & (update_trailing_quarterly | update_trailing_yearly)
+        update_trailing = update_five_days & (update_trailing_quarterly | update_trailing_yearly)
         updates['trailing'] = set(status_db[update_trailing].index).union(missing_symbols)
 
         update_yearly = found & (status_db['last_timestamp_yearly'] != 0) \
             & (status_db['last_timestamp_yearly'] < one_year_plus_ts) \
             & (status_db['last_timestamp_yearly'] > one_year_half_ts)
-        update_yearly = update_one_day & update_yearly
+        update_yearly = update_five_days & update_yearly
         updates['yearly'] = set(status_db[update_yearly].index).union(missing_symbols)
 
         update_quarterly = found & (status_db['last_timestamp_quarterly'] != 0) \
             & (status_db['last_timestamp_quarterly'] < three_months_plus_ts) \
             & (status_db['last_timestamp_quarterly'] > half_year_plus_ts)
-        update_quarterly = update_one_day & update_quarterly
+        update_quarterly = update_five_days & update_quarterly
         updates['quarterly'] = set(status_db[update_quarterly].index).union(missing_symbols)
 
         # print(status_db[update_trailing][['last_timestamp_trailing_str', 'last_timestamp_yearly_str', 'last_timestamp_quarterly_str']])
