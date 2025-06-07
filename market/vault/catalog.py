@@ -5,36 +5,23 @@ class Catalog():
         pass
 
     catalog = {
-        'update': {
-            # FMP_Stocklist: {'stocklist': [],},
-            # Polygon_Tickers: {'tickers': []},
-            # YahooF_Info: {'info': [],},
-            # YahooF_Chart: {'chart': [],},
-            # YahooF_Fundamental: {'fundamental': [],},
-            
-            # File_Files: {'mic': [], 'country': [],},
-            # Polygon_News: {'news_polygon': [],},
-            # Finviz_Ticker_News: {'news_finviz': [],},
-            # YahooF_Fundamental_Quarterly: {'fundamental_quarterly': [],},
-
-        },
         'update_data': {
-            # FMP_Stocklist: {'stocklist': [],},
-            # Polygon_Tickers: {'tickers': []},
-            # File_Files: {'mic': [], 'country': [],},
-            # Polygon_News: {'news_polygon': [],},
+            FMP_Stocklist: {'stocklist': [],},
+            Polygon_Tickers: {'tickers': []},
+            Fred: {'fred': []},
+            File_Files: {'mic': [], 'country': [],},
+            Polygon_News: {'news_polygon': [],},
         },
         'update_symbols_all': {
-            # YahooF_Info: {'info': [],},
+            YahooF_Info: {'info': [],},
         },
         'update_symbols_info': {
-            # Finviz_Ticker_News: {'news_finviz': [],},
-            
-            # YahooF_Chart: {'chart': [],},
-            # Etrade_Quote: {'quote': [],},
+            Finviz_Ticker_News: {'news_finviz': [],},
+            Etrade_Quote: {'quote': [],},
+            YahooF_Chart: {'chart': [],},
         },
         'update_symbols_equity': {
-            # YahooF_Fundamental: {'fundamental': [],},
+            YahooF_Fundamental: {'fundamental': [],},
         },
         'profile': {
             YahooF_Info: {

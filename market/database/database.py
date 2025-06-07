@@ -7,6 +7,7 @@ from multiprocessing import Pool
 class Database():
     sql_types = {
         np.int64:  'INTEGER',
+        np.int32:  'INTEGER',
         np.float64:  'REAL',
         np.bool_:  'BOOLEAN',
         # int:  'INTEGER',

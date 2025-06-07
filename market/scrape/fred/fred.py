@@ -43,8 +43,7 @@ class Fred():
         fred_data = {key: self.fred.get_series(value, observation_start=observation_start) for key, value in indicators.items()}
         macro_data = pd.DataFrame(fred_data)
         macro_data.index = np.array([int(dt.timestamp()) for dt in macro_data.index.to_pydatetime()])
-        macro_data = macro_data.T.to_dict()
-
-        self.db.table_write('fred', macro_data, key_name='timestamp', method='replace')
+        macro_data.index.name = 'timestamp'
+        self.db.table_write('fred', macro_data, replace=True)
         self.logger.info('Fred:    FED update done')
 

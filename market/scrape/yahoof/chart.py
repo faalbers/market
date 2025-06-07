@@ -102,14 +102,16 @@ class YahooF_Chart(YahooF):
         status_db = self.db.table_read('status_db', keys=symbols)
         if status_db.shape[0] == 0: return sorted(symbols)
 
+        found = status_db['found'] > 0
+
         # found and last read more then a day ago
-        one_day = (status_db['found'] > 0) & (status_db['timestamp'] < one_day_ts)
+        one_day = found & (status_db['timestamp'] < one_day_ts)
         
         # not found and last read more then 6 months ago and less then 7 months ago (last try)
-        six_months = (status_db['found'] == 0) & ((status_db['timestamp'] > seven_months_ts) & (status_db['timestamp'] < six_months_ts))
+        six_months = ~found & ((status_db['timestamp'] > seven_months_ts) & (status_db['timestamp'] < six_months_ts))
         
         # if last timestamp is longer then 3 months ago, don't handle it anymore
-        three_month = (status_db['found'] > 0) & (status_db['last_timestamp'] >= three_month_ts)
+        three_month = found & (status_db['last_timestamp'] >= three_month_ts)
 
         # checked from status_db
         status_check = set(status_db[(one_day & three_month) ^ six_months].index.tolist())

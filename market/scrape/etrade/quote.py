@@ -4,6 +4,7 @@ from ...utils import stop_text
 import logging
 from pprint import pp
 from datetime import datetime
+import pandas as pd
 
 class Etrade_Quote(Etrade):
     dbName = 'etrade_quote'
@@ -28,15 +29,15 @@ class Etrade_Quote(Etrade):
             symbols = sorted(key_values)
         else:
             symbols = self.update_check(key_values)
-        
         if len(symbols) == 0: return
+        
         self.init_session()
 
         self.logger.info('Etrade:  Quote: update')
         self.logger.info('Etrade:  Quote: symbols processing : %s' % len(symbols))
 
         # backup first
-        self.db.backup()
+        self.logger.info('Etrade:  Quote: %s' % self.db.backup())
         
         # create symbol blocks
         block_size = 50
@@ -48,13 +49,13 @@ class Etrade_Quote(Etrade):
             symbol_blocks.append(symbols[block_start:block_end])
         if len(symbols) % block_size > 0:
             symbol_blocks.append(symbols[block_end:])
-        
+
         # go through symbol blocks and retrieve data
         count_done = 0
         failed = 0
         failed_total = 0
         for symbol_block in symbol_blocks:
-            if (count_done % 100) == 0:
+            if (count_done % (block_size*2)) == 0:
                 self.logger.info('Etrade:  to do: %s , failed: %s' % (len(symbols)-count_done, failed))
                 self.db.commit()
                 failed = 0
@@ -73,7 +74,14 @@ class Etrade_Quote(Etrade):
             }
 
             mutual_funds = set()
-            response = self.session_get(request_arguments)
+            try:
+                response = self.session_get(request_arguments)
+            except Exception as e:
+                self.logger.info('Etrade:  ALL session get error: %s' % (str(e)))
+                self.logger.info('Etrade:  stopping')
+                self.logger.info('Etrade:  done: %s , failed: %s' % (count_done, failed_total))
+                self.db.commit()
+                return
             if response.headers.get('content-type').startswith('application/json'):
                 response_data = response.json()
                 if 'QuoteResponse' in response_data:
@@ -92,7 +100,13 @@ class Etrade_Quote(Etrade):
                                 equities[symbol] = quote_data['All']
                                 equities[symbol]['securityType'] = security_type
                                 equities[symbol]['dateTimeUTC'] = quote_data['dateTimeUTC']
-
+            else:
+                print(mutual_funds)
+                print(symbols_string)
+                pp(response.text)
+                self.db.commit()
+                raise ValueError('no json content type on ALL')
+            
             if len(mutual_funds) > 0:
                 # get MF_DETAIL
                 # symbols_string = ','.join(mutual_funds)
@@ -105,7 +119,14 @@ class Etrade_Quote(Etrade):
                     },
                 }
 
-                response = self.session_get(request_arguments)
+                try:
+                    response = self.session_get(request_arguments)
+                except Exception as e:
+                    self.logger.info('Etrade:  MF_DETAIL session get error: %s' % (str(e)))
+                    self.logger.info('Etrade:  stopping')
+                    self.logger.info('Etrade:  done: %s , failed: %s' % (count_done, failed_total))
+                    self.db.commit()
+                    return
                 if response.headers.get('content-type').startswith('application/json'):
                     response_data = response.json()
                     if 'QuoteResponse' in response_data:
@@ -119,6 +140,12 @@ class Etrade_Quote(Etrade):
                                 equities[symbol] = quote_data['MutualFund']
                                 equities[symbol]['securityType'] = security_type
                                 equities[symbol]['dateTimeUTC'] = quote_data['dateTimeUTC']
+                else:
+                    print(mutual_funds)
+                    print(symbols_string)
+                    pp(response.text)
+                    self.db.commit()
+                    raise ValueError('no json content type on MF_DETAIL')
 
             # push into database
             for symbol in symbol_block:
@@ -140,27 +167,27 @@ class Etrade_Quote(Etrade):
         self.logger.info('Etrade:  update done')
 
     def update_check(self, symbols):
-        db_status = self.db.table_read('status_db')
+        timestamp_pdt = int(datetime.now().timestamp())
+
+        one_month_ts = timestamp_pdt - (3600 * 24 * 31)
+        half_year_ts = timestamp_pdt - (3600 * 24 * 182)
+
+        status_db = self.db.table_read('status_db', keys=symbols)
+        if status_db.shape[0] == 0: return sorted(symbols)
+
+        # found and last read more then one month ago
+        one_month = (status_db['found'] > 0) & (status_db['timestamp'] < one_month_ts)
         
-        # found is 5 days check
-        found_update = int(datetime.now().timestamp()) - (3600 * 24 * 1)
-        # not found is 1/2 year check
-        not_found_update = int(datetime.now().timestamp()) - (3600 * 24 * 182)
+        # not found and last read more then a half year ago
+        one_year = (status_db['found'] == 0) & (status_db['timestamp'] < half_year_ts)
+        
+        # checked from status_db
+        status_check = set(status_db[one_month ^ one_year].index.tolist())
 
-        update_symbols = []
-        for symbol in symbols:
-            if not symbol in db_status:
-                # never done before, add it
-                update_symbols.append(symbol)
-            else:
-                if db_status[symbol]['found']:
-                    # found before, only do again after 24 h
-                    if db_status[symbol]['timestamp'] <= found_update: update_symbols.append(symbol)
-                else:
-                    # not found before, only try again after 1/2 year
-                    if db_status[symbol]['timestamp'] <= not_found_update: update_symbols.append(symbol)
+        # not read
+        not_read = set(symbols).difference(set(status_db.index))
 
-        return update_symbols
+        return sorted(not_read.union(status_check))
 
     def match_symbol(self, symbol, symbol_block):
         if symbol in symbol_block:
@@ -171,21 +198,25 @@ class Etrade_Quote(Etrade):
         return None
 
     def push_api_data(self, symbol, result):
-        timestamp = int(datetime.now().timestamp())
         found = result[0]
-        status_info = {
+        message = result[2]
+        result = result[1]
+
+        timestamp = int(datetime.now().timestamp())
+        status = {
             'timestamp': timestamp,
             'found': found,
-            'message': str(result[2])
+            'message': str(message)
         }
-
-        self.db.table_write('status_db', {symbol: status_info}, key_name='symbol', method='update')
-        if not found:
-            return
-        result = result[1]
+        status = pd.DataFrame([status], index=[symbol])
+        status.index.name = 'symbol'
+        self.db.table_write('status_db', status)
         
-        result['timestamp'] = timestamp
-        self.db.table_write('quote', {symbol: result}, key_name='symbol', method='replace')
+        if not found:return
+
+        result = pd.DataFrame([result], index=[symbol])
+        result.index.name = 'symbol'
+        self.db.table_write('quote', result)
 
     def get_vault_data(self, data_name, columns, key_values):
         if data_name == 'quote':
