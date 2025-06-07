@@ -62,47 +62,6 @@ class Vault():
             p.join()
         self.logger.info('Scraping threads completed')
 
-        
-    def update_old(self, catalog, key_values=[], forced=False):
-        if not catalog in self.catalog.catalog: return
-
-        catalog = self.catalog.catalog[catalog]
-
-        # fill un sub classes with scrapes that need to be updated
-        scraper_classes_data = {YahooF: [], FMP: [], Polygon: [], File: [], Finviz: [], Fred: [], Etrade: []}
-        for scraper_class, scraper_data in catalog.items():
-            for sub_class, scraper_class_data in scraper_classes_data.items():
-                if issubclass(scraper_class, sub_class):
-                    scraper_class_data.append((scraper_class, sorted(scraper_data)))
-
-        # create multi chunks for pool
-        multi_chunks = []
-        log_queue = self.logger.handlers[0].queue
-        do_yahoof_chart = False
-        for sub_class, scraper_classes in scraper_classes_data.items():
-            # creat multi chunk per sub_class
-            update_scrapers = {}
-            for scraper_class, data_names in scraper_classes:
-                if scraper_class == YahooF_Chart: do_yahoof_chart = True
-                if not scraper_class in update_scrapers:
-                    update_scrapers[scraper_class] = []
-                for data_name in data_names:
-                    update_scrapers[scraper_class] += scraper_class.get_data_names(data_name)
-            if len(update_scrapers) > 0:
-                multi_chunks.append((log_queue, update_scrapers, key_values, forced))
-
-        # run scrapes in multi thread
-        if len(multi_chunks) == 0: return
-        self.logger.info('Run scrapes in %s threads' % (len(multi_chunks)))
-        processes = []
-        for chunk in multi_chunks:
-            p = multiprocessing.Process(target=Vault.update_scrapers, args=chunk)
-            processes.append(p)
-            p.start()
-        for p in processes:
-            p.join()
-        self.logger.info('Scraping threads completed')
-
         # if we manually stopped we dont want to cache
         if stop_text(): return
 
