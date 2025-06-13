@@ -9,8 +9,6 @@ from datetime import datetime
 import time
 
 class Analysis():
-    equity_types = ['EQUITY', 'MUTUALFUND', 'ETF', 'INDEX', 'MONEYMARKET', 'ECNQUOTE']
-    
     @ staticmethod
     def __get_param(data, param):
         # recursively go through param keys to find value
@@ -25,8 +23,9 @@ class Analysis():
 
     def __init__(self, tickers, update=False, forced=False):
         self.tickers = tickers
-        self.viz = Viz()
         self.__get_data(update, forced)
+        return
+        self.viz = Viz()
         # self.benchmarks = Tickers(['SPY', 'QQQ'])
 
     def test(self, symbol, date):
@@ -53,100 +52,8 @@ class Analysis():
         self.viz.plot_dataframe(df[['compare']], line=0.0)
         self.viz.plot_dataframe(df[['follow']], line=0.0)
 
-    def sector_industry(self):
-        params = self.get_params()
-        param_names = sorted(params)
-        for param in param_names:
-            print(param,':', params[param])
-
-        sector_industry = {'sectors': {}}
-        params = [
-            'price_to_earnings_trailing',
-            'price_to_earnings_forward',
-            'dividend_yield',
-        ]
-        for symbol, symbol_data in self.symbols.items():
-            if symbol_data['type'] != 'EQUITY': continue
-            if symbol_data['sector'] == None: continue
-
-            # greate sector industry hierarchy
-            sector_data = sector_industry['sectors']
-            if not symbol_data['sector'] in sector_data:
-                sector_data[symbol_data['sector']] = {'industries': {}, 'params': {}, 'count': 0}
-            sector_data[symbol_data['sector']]['count'] += 1
-            industries_data = sector_data[symbol_data['sector']]['industries']
-            sector_params = sector_data[symbol_data['sector']]['params']
-            if not symbol_data['industry'] in industries_data:
-                industries_data[symbol_data['industry']] = {'params': {}, 'count': 0}
-            industries_data[symbol_data['industry']]['count'] += 1
-            industry_params = industries_data[symbol_data['industry']]['params']
-            
-            # add params
-            for param in params:
-                if symbol_data[param] == None: continue
-                if isinstance(symbol_data[param], str): continue # skip 'Infinity'
-
-                # add sector params
-                if not param in sector_params:
-                    sector_params[param] = {'values': []}
-                sector_params[param]['values'].append(symbol_data[param])
-
-                # add industry params
-                if not param in industry_params:
-                    industry_params[param] = {'values': []}
-                industry_params[param]['values'].append(symbol_data[param])
-
-        # calculate averages
-        with open('sector_industry.txt', 'w') as f:
-            for sector, sector_data in sector_industry['sectors'].items():
-                # handle sector params
-                f.write('%s: %s\n' % (sector, sector_data['count']))
-                for param, param_data in sector_data['params'].items():
-                    param_data['count'] = len(param_data['values'])
-                    param_data['mean'] = np.mean(param_data['values']).round(2)
-                    param_data.pop('values')
-                    f.write('\t%s (%s, count = %s)\n' % (param_data['mean'], param, param_data['count']))
-                f.write('\n')
-                for industry, industry_data in sector_data['industries'].items():
-                    # handle industry params
-                    f.write('\t%s: %s\n' % (industry, industry_data['count']))
-                    for param, param_data in industry_data['params'].items():
-                        param_data['count'] = len(param_data['values'])
-                        param_data['mean'] = np.mean(param_data['values']).round(2)
-                        param_data.pop('values')
-                        f.write('\t\t%s (%s, count = %s)\n' % (param_data['mean'], param, param_data['count']))
-                    f.write('\n')
-
-        # 1. **Low P/E Ratio (< 10):** May indicate undervalued stocks with potential for growth.
-        # 2. **Moderate P/E Ratio (10-20):** Indicates a relatively fair valuation, with some room for growth.
-        # 3. **High P/E Ratio (> 20):** Suggests overvaluation, but may be due to high growth expectations or a strong
-        # market.
-        # 4. **P/E Ratio > 30:** Typically indicates an overvalued stock with limited potential for growth.        
         
 
-    def get_params(self):
-        def fix_key(key):
-            if key.isupper(): return'<symbol>'
-            if key.isnumeric():
-                if len(key) == 10: return'<timestamp>'
-                return'<number>'
-            return key
-        def recurse_params(data, params, parent):
-            if isinstance(data, dict):
-                for key, value in data.items():
-                    key = fix_key(key)
-                    if parent != '':
-                        param_key = '%s:%s' % (parent, key)
-                    else:
-                        param_key = key
-                    if not param_key in params:
-                        params[param_key] = set()
-                    params[param_key].add(type(value))
-                    recurse_params(value, params, param_key)
-        params = {}
-        for symbol, symbol_data in self.symbols.items():
-            recurse_params(symbol_data, params, '')
-        return params
     
     def get_values(self, param, symbols=[], only_values=False):
         values = {}
@@ -171,13 +78,19 @@ class Analysis():
         # '*' is exists
         # add '!' in front of each individualto invert
         # add '! ' in front of full collection to invert
-        all_symbols = sorted(self.symbols.keys())
+        print(self.data)
+        all_symbols = self.data.index.to_list()
         all_df = pd.DataFrame(index=all_symbols)
         for filter in settings['filter']:
             filter_name = '%s_%s_%s' % tuple(filter)
             print(filter_name)
-            found_values = self.get_values(filter[0])
-            found_values = pd.Series(found_values).dropna()
+            # find the columns that need to be searched
+            if filter[0] in self.data.columns:
+                found_values = self.data[filter[0]].dropna()
+            else:
+                found_values = pd.Series()
+            # found_values = self.get_values(filter[0])
+            # found_values = pd.Series(found_values).dropna()
 
             # get filter chars and se if we need to totally negate
             filter_chars = filter[1]
@@ -186,7 +99,7 @@ class Analysis():
             if filter_chars.startswith('! '):
                 filter_negate = True
                 filter_chars = filter_chars[2:]
-            
+                      
             # create filter blocks, [negate, char]
             filter_blocks = []
             current_filter_block = [False, '']
@@ -207,29 +120,29 @@ class Analysis():
                     if negate:
                         column_name = '!%s' % filter_char
                         filter_df[column_name] = True
-                        filter_df.loc[found_values.index, column_name] = found_values != filter_value
+                        filter_df.loc[found_values.index, column_name] = (found_values != filter_value)
                     else:
                         column_name = filter_char
                         filter_df[column_name] = False
-                        filter_df.loc[found_values.index, column_name] = found_values == filter_value
+                        filter_df.loc[found_values.index, column_name] = (found_values == filter_value)
                 if filter_char == '>':
                     if negate:
                         column_name = '!%s' % filter_char
                         filter_df[column_name] = True
-                        filter_df.loc[found_values.index, column_name] = found_values <= filter_value
+                        filter_df.loc[found_values.index, column_name] = (found_values <= filter_value)
                     else:
                         column_name = filter_char
                         filter_df[column_name] = False
-                        filter_df.loc[found_values.index, column_name] = found_values > filter_value
+                        filter_df.loc[found_values.index, column_name] = (found_values > filter_value)
                 if filter_char == '<':
                     if negate:
                         column_name = '!%s' % filter_char
                         filter_df[column_name] = True
-                        filter_df.loc[found_values.index, column_name] = found_values >= filter_value
+                        filter_df.loc[found_values.index, column_name] = (found_values >= filter_value)
                     else:
                         column_name = filter_char
                         filter_df[column_name] = False
-                        filter_df.loc[found_values.index, column_name] = found_values < filter_value
+                        filter_df.loc[found_values.index, column_name] = (found_values < filter_value)
                 if filter_char == '*':
                     if negate:
                         column_name = '!%s' % filter_char
@@ -241,7 +154,142 @@ class Analysis():
                         filter_df.loc[found_values.index, column_name] = True
             all_df[filter_name] = filter_df.any(axis=1)
         result = all_df.all(axis=1)
-        return list(result[result == True].index)
+        # return list(result[result == True].index)
+        return self.data.loc[result[result == True].index].copy()
+
+    def __get_data(self, update, forced):
+        # get data
+        profile = self.tickers.get_profiles(update=update, forced=forced)
+        analysis = self.tickers.get_analysis(update=update, forced=forced)
+
+        # merge into one dataframe
+        analysis['info']['data_time'] = pd.to_datetime(analysis['info']['data_time'], unit='s').dt.tz_localize('UTC').dt.tz_convert('US/Pacific')
+        self.data = profile.merge(analysis['info'], how='left', left_index=True, right_index=True)
+
+        # get sector charts
+        sectors = {
+            'XLV': 'Healthcare',
+            'XLB': 'Basic Materials',
+            'XLK': 'Technology',
+            'XLF': 'Financial Services',
+            'XLI': 'Industrials',
+            'XLRE': 'Real Estate',
+            'XLC': 'Communication Services',
+            'XLU': 'Utilities',
+            'XLE': 'Energy',
+            'XLP': 'Consumer Defensive',
+            'XLY': 'Consumer Cyclical',
+            'SPY': 'S&P500',
+        }
+        sector_tickers = Tickers(list(sectors.keys()))
+        sector_charts = sector_tickers.get_charts(update=update, forced=forced)
+        self.sector_indices = sector_charts['SPY'][['Close']]
+        self.sector_indices = self.sector_indices.rename(columns={'Close': 'S&P500'})
+        for sector_symbol, sector in sectors.items():
+            if sector_symbol == 'SPY': continue
+            if not sector_symbol in sector_charts:
+                raise Exception('sector ticker not found: %s' % sector_symbol)
+            self.sector_indices = self.sector_indices.join(sector_charts[sector_symbol]['Close'])
+            self.sector_indices = self.sector_indices.rename(columns={'Close': sector})
+        # pp(self.sector_indices.round(2))
+
+    # def get_params(self):
+    #     def fix_key(key):
+    #         if key.isupper(): return'<symbol>'
+    #         if key.isnumeric():
+    #             if len(key) == 10: return'<timestamp>'
+    #             return'<number>'
+    #         return key
+    #     def recurse_params(data, params, parent):
+    #         if isinstance(data, dict):
+    #             for key, value in data.items():
+    #                 key = fix_key(key)
+    #                 if parent != '':
+    #                     param_key = '%s:%s' % (parent, key)
+    #                 else:
+    #                     param_key = key
+    #                 if not param_key in params:
+    #                     params[param_key] = set()
+    #                 params[param_key].add(type(value))
+    #                 recurse_params(value, params, param_key)
+    #     params = {}
+    #     for symbol, symbol_data in self.symbols.items():
+    #         recurse_params(symbol_data, params, '')
+    #     return params
+
+    # def sector_industry(self):
+    #     pp(sorted(self.sector_indices.columns))
+    #     pp(sorted(self.data['sector'].dropna().unique()))
+    
+    # def sector_industry_old(self):
+    #     params = self.get_params()
+    #     param_names = sorted(params)
+    #     for param in param_names:
+    #         print(param,':', params[param])
+
+    #     sector_industry = {'sectors': {}}
+    #     params = [
+    #         'price_to_earnings_trailing',
+    #         'price_to_earnings_forward',
+    #         'dividend_yield',
+    #     ]
+    #     for symbol, symbol_data in self.symbols.items():
+    #         if symbol_data['type'] != 'EQUITY': continue
+    #         if symbol_data['sector'] == None: continue
+
+    #         # greate sector industry hierarchy
+    #         sector_data = sector_industry['sectors']
+    #         if not symbol_data['sector'] in sector_data:
+    #             sector_data[symbol_data['sector']] = {'industries': {}, 'params': {}, 'count': 0}
+    #         sector_data[symbol_data['sector']]['count'] += 1
+    #         industries_data = sector_data[symbol_data['sector']]['industries']
+    #         sector_params = sector_data[symbol_data['sector']]['params']
+    #         if not symbol_data['industry'] in industries_data:
+    #             industries_data[symbol_data['industry']] = {'params': {}, 'count': 0}
+    #         industries_data[symbol_data['industry']]['count'] += 1
+    #         industry_params = industries_data[symbol_data['industry']]['params']
+            
+    #         # add params
+    #         for param in params:
+    #             if symbol_data[param] == None: continue
+    #             if isinstance(symbol_data[param], str): continue # skip 'Infinity'
+
+    #             # add sector params
+    #             if not param in sector_params:
+    #                 sector_params[param] = {'values': []}
+    #             sector_params[param]['values'].append(symbol_data[param])
+
+    #             # add industry params
+    #             if not param in industry_params:
+    #                 industry_params[param] = {'values': []}
+    #             industry_params[param]['values'].append(symbol_data[param])
+
+    #     # calculate averages
+    #     with open('sector_industry.txt', 'w') as f:
+    #         for sector, sector_data in sector_industry['sectors'].items():
+    #             # handle sector params
+    #             f.write('%s: %s\n' % (sector, sector_data['count']))
+    #             for param, param_data in sector_data['params'].items():
+    #                 param_data['count'] = len(param_data['values'])
+    #                 param_data['mean'] = np.mean(param_data['values']).round(2)
+    #                 param_data.pop('values')
+    #                 f.write('\t%s (%s, count = %s)\n' % (param_data['mean'], param, param_data['count']))
+    #             f.write('\n')
+    #             for industry, industry_data in sector_data['industries'].items():
+    #                 # handle industry params
+    #                 f.write('\t%s: %s\n' % (industry, industry_data['count']))
+    #                 for param, param_data in industry_data['params'].items():
+    #                     param_data['count'] = len(param_data['values'])
+    #                     param_data['mean'] = np.mean(param_data['values']).round(2)
+    #                     param_data.pop('values')
+    #                     f.write('\t\t%s (%s, count = %s)\n' % (param_data['mean'], param, param_data['count']))
+    #                 f.write('\n')
+
+    #     # 1. **Low P/E Ratio (< 10):** May indicate undervalued stocks with potential for growth.
+    #     # 2. **Moderate P/E Ratio (10-20):** Indicates a relatively fair valuation, with some room for growth.
+    #     # 3. **High P/E Ratio (> 20):** Suggests overvaluation, but may be due to high growth expectations or a strong
+    #     # market.
+    #     # 4. **P/E Ratio > 30:** Typically indicates an overvalued stock with limited potential for growth.        
 
     # def test_equity(self):
     #     find_settings = {
@@ -308,106 +356,6 @@ class Analysis():
     #         sectors_industries[symbol_data['sector']].add(symbol_data['industry'])
     #     return sectors_industries
 
-    def __get_data(self, update, forced):
-        # get analysis data
-        analysis_data = self.tickers.get_analysis(update=update, forced=forced)
-
-        # merge into one dataframe
-        self.info = pd.merge(analysis_data['info'], analysis_data['quote'], left_index=True, right_index=True, how='left')
-
-        # drop the ones with a dot in the symbol name
-        self.info = self.info[~self.info.index.str.contains('.', regex=False)]
-
-        # only get the ones included in equity_types
-        self.info = self.info[self.info['type'].isin(self.equity_types)]
-
-        # get fundamental
-        self.fundamental = analysis_data['fundamental']
-        print(len(self.fundamental))
-        
-        # get charts
-        self.charts = analysis_data['chart']
-        print(len(self.charts))
-        # print(self.charts['AAPL'])
-        pp(self.charts)
-
-        # get secto charts
-        sectors = {
-            'XLV': 'Healthcare',
-            'XLB': 'Basic Materials',
-            'XLK': 'Technology',
-            'XLF': 'Financial Services',
-            'XLI': 'Industrials',
-            'XLRE': 'Real Estate',
-            'XLC': 'Communication Services',
-            'XLU': 'Utilities',
-            'XLE': 'Energy',
-            'XLP': 'Consumer Defensive',
-            'XLY': 'Consumer Cyclical',
-        }
-        sector_indices = list(sectors.keys()) + ['SPY']
-        sector_tickers = Tickers(sector_indices)
-        sector_charts = sector_tickers.get_charts(update=update, forced=forced)['chart']
-        self.sector_indices = sector_charts['SPY'][['close']]
-        self.sector_indices = self.sector_indices.rename(columns={'close': 'S&P500'})
-        for sector_symbol, sector in sectors.items():
-            if not sector_symbol in sector_charts:
-                raise Exception('sector ticker not found: %s' % sector_symbol)
-            # print(self.sector_indices)
-            # print(sector_charts[sector_symbol]['close'])
-            self.sector_indices = self.sector_indices.join(sector_charts[sector_symbol]['close'])
-            self.sector_indices = self.sector_indices.rename(columns={'close': sector})
-        pp(self.sector_indices.round(2))
-
-        return
-        self.symbols = {}
-        for symbol, symbol_data in analysis.items():
-            # skip non us market symbols
-            if '.' in symbol: continue
-
-            # skip some others
-            if 'name' in symbol_data:
-                if symbol_data['name'] == None: continue
-            else:
-                continue
-            if not symbol_data['type'] in self.equity_types: continue
-            
-            self.symbols[symbol] = symbol_data
-        print('symbols: %d' % len(self.symbols))
-
-        # # get fundamental
-        # self.fundamental = self.tickers.get_fundamental()
-
-        # get charts
-        self.charts = storage.load('database/yahoof_chart')
-        print('charts: %d' % len(self.charts))
-
-        # get charts sector
-        sectors = {
-            'XLV': 'Healthcare',
-            'XLB': 'Basic Materials',
-            'XLK': 'Technology',
-            'XLF': 'Financial Services',
-            'XLI': 'Industrials',
-            'XLRE': 'Real Estate',
-            'XLC': 'Communication Services',
-            'XLU': 'Utilities',
-            'XLE': 'Energy',
-            'XLP': 'Consumer Defensive',
-            'XLY': 'Consumer Cyclical',
-        }
-        self.sector_indices = self.charts['SPY'][['Adj Close']].copy()
-        self.sector_indices = self.sector_indices.rename(columns={'Adj Close': 'S&P500'})
-        for sector_symbol, sector in sectors.items():
-            if not sector_symbol in self.charts:
-                raise Exception('sector ticker not found: %s' % sector_symbol)
-            self.sector_indices = self.sector_indices.join(self.charts[sector_symbol]['Adj Close'])
-            self.sector_indices = self.sector_indices.rename(columns={'Adj Close': sector})
-        
-        # sector_indices = self.sector_indices / self.sector_indices.iloc[0]
-        # sp = sector_indices.pop('S&P500')
-        # test = (sector_indices.T / sp.values).T
-        # self.viz.plot_dataframe(test)
 
     # def news_sentiment(self):
     #     start_date = '2023-01-01'
