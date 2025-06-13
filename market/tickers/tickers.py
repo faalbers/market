@@ -9,7 +9,7 @@ class Tickers():
     def __init__(self, symbols=[], types=[]):
         self.logger = logging.getLogger('Market')
         self.vault = Vault()
-        self.__make_symbols(symbols, types)
+        self.__symbols = self.__make_symbols(symbols, types)
 
     def __make_symbols(self, symbols=[], types=[] ,update=False, forced=False):
         symbols_data_vault = self.vault.get_data('symbols', key_values=symbols, update=update, forced=forced)
@@ -70,11 +70,35 @@ class Tickers():
         # final cleanup
         symbols_data.sort_index(inplace=True)
 
-        self.__symbols = symbols_data
-
         # filter types iif needed
         if len(types) > 0:
-            self.__symbols = self.get_symbols_info(types)
+            symbols_data = self.__get_symbols_info(symbols_data, types)
+        
+        return symbols_data
+
+    def __get_symbols_info(self, symbols, types=[]):
+        if symbols.empty: return symbols
+        if len(types) > 0:
+            found = pd.Series(dtype='bool', index=symbols.index, data=False)
+            for type_code in types:
+                splits = type_code.split('_')
+                all_types = False
+                if splits[0] == '*': all_types = True
+                if len(splits) == 1:
+                    if all_types:
+                        found = pd.Series(dtype='bool', index=symbols.index, data=True)
+                    else:
+                        found = found | (symbols['type'] == splits[0])
+                elif len(splits) == 2:
+                    if all_types:
+                        found = found | (symbols['sub_type'] == splits[1])
+                    else:
+                        found = found | (symbols['type'] == splits[0]) & (symbols['sub_type'] == splits[1])
+            return symbols[found]
+        return symbols
+
+    def get_symbols_info(self, types=[]):
+        return self.__get_symbols_info(self.__symbols, types)
 
     def update(self, forced=False):
         updates = []
@@ -97,13 +121,20 @@ class Tickers():
         if len(symbols_equity) > 0:
             updates.append(['update_symbols_equity', symbols_equity, forced])
 
+        for update in updates:
+            print(update[0], len(update[1]), update[2])
+        
         self.vault.update(updates)
     
     def update_old(self, forced=False):
         self.vault.update('update', key_values=self.__symbols.index.to_list(), forced=forced)
 
-    def add_symbols(self, symbols):
-        pass
+    def add_symbols(self, symbols, types=[]):
+        symbols = sorted(set(symbols).difference(set(self.__symbols.index)))
+        if len(symbols) == 0: return
+        symbols = self.__make_symbols(symbols, types)
+        self.__symbols = pd.concat([self.__symbols, symbols])
+        self.__symbols.sort_index(inplace=True)
 
     def get_symbols(self):
         return self.__symbols.index.to_list()
@@ -119,30 +150,14 @@ class Tickers():
                         types_all.add('%s_%s' % (type_name, sub_type))
 
         return sorted(types_all)
-    
-    def get_symbols_info(self, types=[]):
-        if self.__symbols.empty: return self.__symbols
-        if len(types) > 0:
-            found = pd.Series(dtype='bool', index=self.__symbols.index, data=False)
-            for type_code in types:
-                splits = type_code.split('_')
-                all_types = False
-                if splits[0] == '*': all_types = True
-                if len(splits) == 1:
-                    if all_types:
-                        found = pd.Series(dtype='bool', index=self.__symbols.index, data=True)
-                    else:
-                        found = found | (self.__symbols['type'] == splits[0])
-                elif len(splits) == 2:
-                    if all_types:
-                        found = found | (self.__symbols['sub_type'] == splits[1])
-                    else:
-                        found = found | (self.__symbols['type'] == splits[0]) & (self.__symbols['sub_type'] == splits[1])
-            return self.__symbols[found]
-        return self.__symbols
-    
+
+    def get_infos(self, update=False, forced=False):
+        data = self.vault.get_data('info', key_values=self.__symbols.index.to_list(), update=update, forced=forced)
+        return data
+
     def get_profiles(self, update=False, forced=False):
-        data = self.vault.get_data('profile', key_values=self.__symbols.index.to_list(), update=update, forced=forced)
+        data = self.vault.get_data('profile', key_values=self.__symbols.index.to_list(), update=update, forced=forced)['info']
+        data = self.__symbols.merge(data, how='left', left_index=True, right_index=True)
         return data
     
     def get_charts(self, start_date=None, end_date=None, update=False, forced=False):
@@ -156,7 +171,7 @@ class Tickers():
                     data[symbol] = data[symbol].loc[:end_date]
         return data
 
-    def get_fundamental(self, update=False, forced=False):
+    def get_fundamentals(self, update=False, forced=False):
         data = self.vault.get_data('fundamental', key_values=self.__symbols.index.to_list(), update=update, forced=forced)
         return data
     
@@ -167,6 +182,7 @@ class Tickers():
     def get_analysis(self, update=False, forced=False):
         data = self.vault.get_data('analysis', key_values=self.__symbols.index.to_list(), update=update, forced=forced)
         return data
+
     
     # def add_us_market(self, update=False, forced=False):
     #     symbols_data = self.vault.get_data('us_symbols', update=update, forced=forced)
