@@ -37,7 +37,46 @@ class Analysis_GUI:
 
     def analyze(self):
         filters = self.filters_frame.get_filters()
-        pp(filters)
+
+        select = pd.Series(True, index=self.analysis.data.index)
+        for filter in filters:
+            or_filters = [filter['and']] + filter['or']
+            or_select = pd.Series(False, index=self.analysis.data.index)
+            for or_filter in or_filters:
+                column = or_filter[0]
+                function = or_filter[1]
+                value = or_filter[2]
+                if value.isnumeric():
+                    value = int(value)
+                elif value.replace('.', '').isnumeric():
+                    value = float(value)
+                
+                if function == '==':
+                    or_select = or_select | (self.analysis.data[column] == value)
+            select = select & or_select
+
+        print(self.analysis.data[select])
+
+
+        # filter_settings = {}
+        # for filter in self.winfo_children():
+        #     row = filter.grid_info()['row']
+        #     filter_settings[row] = filter.get_filter_settings()
+        
+        # # create filter
+        # filter = pd.Series(True, index=self.analysis.data.index)
+        # for row in sorted(filter_settings):
+        #     column = filter_settings[row][0]
+        #     function = filter_settings[row][1]
+        #     value = filter_settings[row][2]
+        #     if value.isnumeric():
+        #         value = int(value)
+        #     elif value.replace('.', '').isnumeric():
+        #         value = float(value)
+            
+        #     if function == '==':
+        #         filter = filter & (self.analysis.data[column] == value)
+        # print(self.analysis.data[filter])
 
 class Filters_Frame(tk.Frame):
     def __init__(self, parent, gui):
