@@ -54,23 +54,37 @@ class Analysis_GUI(tk.Tk):
                 elif value.replace('.', '').isnumeric():
                     value = float(value)
                 
+                if column == self.analysis.data.index.name:
+                    test_series = self.analysis.data.index
+                else:
+                    test_series = self.analysis.data[column]
+                
                 if function == '==':
-                    or_select = or_select | (self.analysis.data[column] == value)
+                    or_select = or_select | (test_series == value)
                 
                 if function == '!=':
-                    or_select = or_select | (self.analysis.data[column] != value)
+                    or_select = or_select | (test_series != value)
                     
                 if function == '>':
-                    or_select = or_select | (self.analysis.data[column] > value)
+                    or_select = or_select | (test_series > value)
                     
                 if function == '<':
-                    or_select = or_select | (self.analysis.data[column] < value)
+                    or_select = or_select | (test_series < value)
                     
                 if function == '>=':
-                    or_select = or_select | (self.analysis.data[column] >= value)
+                    or_select = or_select | (test_series >= value)
                     
                 if function == '<=':
-                    or_select = or_select | (self.analysis.data[column] <= value)
+                    or_select = or_select | (test_series <= value)
+                    
+                if function == 'contains':
+                    or_select = or_select | (test_series.str.lower().str.contains(value.lower().replace('^', r'\^')))
+                    
+                if function == 'startswith':
+                    or_select = or_select | (test_series.str.lower().str.startswith(value.lower()))
+                    
+                if function == 'endswith':
+                    or_select = or_select | (test_series.str.lower().str.endswith(value.lower()))
                     
             select = select & or_select
 
@@ -181,7 +195,8 @@ class Filter(tk.Frame):
         add.grid(row=0, column=1)
 
         # add param option menu
-        params = ['type','sub_type'] + sorted(set(self.analysis.data.columns).difference(['type','sub_type']))
+        params = [self.analysis.data.index.name] + ['type','sub_type'] + sorted(set(self.analysis.data.columns).difference(['type','sub_type']))
+        # params = ['type','sub_type'] + sorted(set(self.analysis.data.columns).difference(['type','sub_type']))
         self.param_select = tk.StringVar()
         self.param_select.set(params[0])
         param = tk.OptionMenu(self, self.param_select, *params, command=self.param_changed)
@@ -196,27 +211,40 @@ class Filter(tk.Frame):
             '<',
             '>=',
             '<=',
+            'contains',
+            'startswith',
+            'endswith',
         ]
         self.function_select = tk.StringVar()
         self.function_select.set(functions[0])
-        function = tk.OptionMenu(self, self.function_select, *functions)
-        function.config(width=3)
+        function = tk.OptionMenu(self, self.function_select, *functions, command=self.function_changed)
+        function.config(width=7)
         function.grid(row=0, column=3)
 
         # add value option menu
-        values = sorted(self.analysis.data['type'].dropna().unique())
         self.value_select = tk.StringVar()
-        self.value_select.set(values[0])
-        self.value = tk.OptionMenu(self, self.value_select, *values)
-        self.value.config(width=30)
-        self.value.grid(row=0, column=5)
+        self.value = None
+        # self.value = tk.Entry(self, width=37)
+        # self.value.grid(row=0, column=5)
+        self.param_changed(self.param_select.get())
+
 
     def param_changed(self, param):
-        values = sorted(self.analysis.data[param].dropna().unique())
-        self.value.destroy()
-        if len(values) == 0:
-            for i, widget in enumerate(self.winfo_children()):
-                widget.grid_configure(column=i)
+        if not isinstance(self.value, type(None)):
+            self.value.destroy()
+            self.value = None
+        function = self.function_select.get()
+        if param == self.analysis.data.index.name:
+            values = sorted(self.analysis.data.index)
+        else:
+            values = sorted(self.analysis.data[param].dropna().unique())
+        # if len(values) == 0:
+        #     for i, widget in enumerate(self.winfo_children()):
+        #         widget.grid_configure(column=i)
+        
+        if function in ['contains', 'startswith', 'endswith']:
+            self.value = tk.Entry(self, width=37)
+            self.value.grid(row=0, column=5)
         elif len(values) <= 200:
             self.value_select.set(values[0])
             self.value = tk.OptionMenu(self, self.value_select, *values)
@@ -224,8 +252,10 @@ class Filter(tk.Frame):
             self.value.grid(row=0, column=5)
         else:
             self.value = tk.Entry(self, width=37)
-            self.value.get
             self.value.grid(row=0, column=5)
+
+    def function_changed(self, function):
+        self.param_changed(self.param_select.get())
 
     def get_filter(self):
         column = self.param_select.get()

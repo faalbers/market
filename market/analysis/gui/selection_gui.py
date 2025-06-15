@@ -11,6 +11,14 @@ class Analysis_Selection_GUI(tk.Toplevel):
 
         self.title('Market Analysis Selection (%s)' % self.data.shape[0])
 
+        # action buttons frame
+        frame_actions = tk.Frame(self)
+        frame_actions.pack(anchor='w', padx=10, pady=10)
+
+        # add actions
+        self.button_test = tk.Button(frame_actions, text='test', command=self.test)
+        self.button_test.grid(row=0, column=0)
+
         style = ttk.Style()
         style.theme_use('default')
         style.configure('Treeview', fieldbackground="#593C3C")
@@ -20,6 +28,16 @@ class Analysis_Selection_GUI(tk.Toplevel):
 
         self.tree_refresh()
 
+    def test(self):
+        print(self.get_selected_symbols())
+    
+    def get_selected_symbols(self):
+        selection = self.tree.selection()
+        symbols = []
+        for sel in selection:
+            symbols.append(self.tree.item(sel)['values'][0])
+        return symbols
+    
     def tree_refresh(self):
         for widget in self.tree_frame.winfo_children():
             widget.destroy()
@@ -35,7 +53,10 @@ class Analysis_Selection_GUI(tk.Toplevel):
         self.tree['columns'] = self.data.columns.tolist()
         self.tree.column('#0', width=0, stretch=tk.NO)
         self.tree.heading('#0', text='', anchor=tk.W)
-        
+
+        # Bind Ctrl+A to select all
+        self.tree.bind('<Control-a>', self.select_all)
+
         for column in columns:
             self.tree.column(column, anchor=tk.W, width=120)
             self.tree.heading(column, text=column, anchor=tk.W, command = lambda _col=column: self.sort_tree(_col, False))
@@ -47,3 +68,7 @@ class Analysis_Selection_GUI(tk.Toplevel):
         self.data.sort_values(by=column, ascending=not reverse, inplace=True)
         self.tree_refresh()
         self.tree.heading(column, command=lambda _col=column: self.sort_tree(_col, not reverse))
+
+    def select_all(self, event=None):
+        children = self.tree.get_children()
+        self.tree.selection_set(children)
