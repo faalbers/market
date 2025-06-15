@@ -381,7 +381,6 @@ class YahooF_Info(YahooF):
         
         if 'upgrades_downgrades' in result_data:
             found = True
-            print(result_data['upgrades_downgrades'])
             result_data['upgrades_downgrades'].index = result_data['upgrades_downgrades'].index.tz_localize(None)
             result_data['upgrades_downgrades'].index = result_data['upgrades_downgrades'].index.astype('int64') // 10**9
             result_data['upgrades_downgrades'].index.name = 'timestamp'
