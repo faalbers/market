@@ -10,23 +10,23 @@ class Catalog():
             # Polygon_Tickers: {'tickers': []},
             # Fred: {'fred': []},
             # File_Files: {'mic': [], 'country': [],},
-            # Polygon_News: {'news_polygon': [],},
+            Polygon_News: {'news_polygon': [],},
         },
         'update_symbols_all': {
             YahooF_Info: {'info': [],},
         },
         'update_symbols_info': {
-            # Finviz_Ticker_News: {'news_finviz': [],},
+            Finviz_Ticker_News: {'news_finviz': [],},
             # Etrade_Quote: {'quote': [],},
             # YahooF_Chart: {'chart': [],},
         },
         'update_symbols_equity': {
-            # YahooF_Fundamental: {'fundamental': [],},
+            YahooF_Fundamental: {'fundamental': [],},
         },
         'profile': {
             YahooF_Info: {
                 'info': [
-                    ['longBusinessSummary', 'description'],
+                    # ['longBusinessSummary', 'description'],
                     ['fullExchangeName', 'exchange_name'],
                     ['sectorDisp', 'sector'],
                     ['industryDisp', 'industry'],

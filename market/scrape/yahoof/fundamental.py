@@ -22,20 +22,17 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     income_stmt_trailing = ticker.get_income_stmt(freq='trailing')
-                    if income_stmt_trailing.empty:
-                        data[0] = False
-                        data[2] = 'income stmt trailing is empty'
+                    if not isinstance(income_stmt_trailing, type(None)) and income_stmt_trailing.shape[0] > 0:
+                        data[1]['income_stmt_trailing'] = income_stmt_trailing
                     else:
-                        data[0] = True
-                        data[1]['trailing'] = income_stmt_trailing
-                        data[2] = 'ok'
+                        data[2]['income_stmt_trailing'] = 'no income_stmt_trailing'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
                         time.sleep(60)
                         continue
                     else:
-                        return [False, data, e]
+                        data[2]['income_stmt_trailing'] = str(e)
                 break
             return data
         # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
@@ -46,18 +43,20 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     cash_flow_trailing = ticker.get_cash_flow(freq='trailing')
-                    if not cash_flow_trailing.empty:
-                        data[1]['trailing'] = pd.concat([data[1]['trailing'], cash_flow_trailing])
-                        data[2] = 'ok'
+                    if not isinstance(cash_flow_trailing, type(None)) and cash_flow_trailing.shape[0] > 0:
+                        data[1]['cash_flow_trailing'] = cash_flow_trailing
+                    else:
+                        data[2]['cash_flow_trailing'] = 'no cash_flow_trailing'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
                         time.sleep(60)
                         continue
+                    else:
+                        data[2]['cash_flow_trailing'] = str(e)
                 break
             return data
         # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
-        if not data[0]: return [False, proc_cash_flow_trailing, data]
         return [True, proc_cash_flow_trailing, data]
     
     def get_income_stmt_yearly(self, data):
@@ -65,18 +64,20 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     income_stmt_yearly = ticker.get_income_stmt(freq='yearly')
-                    if not income_stmt_yearly.empty:
-                        data[1]['yearly'] = income_stmt_yearly
-                        data[2] = 'ok'
+                    if not isinstance(income_stmt_yearly, type(None)) and income_stmt_yearly.shape[0] > 0:
+                        data[1]['income_stmt_yearly'] = income_stmt_yearly
+                    else:
+                        data[2]['income_stmt_yearly'] = 'no income_stmt_yearly'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
                         time.sleep(60)
                         continue
+                    else:
+                        data[2]['income_stmt_yearly'] = str(e)
                 break
             return data
         # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
-        if not data[0]: return [False, proc_income_stmt_yearly, data]
         return [True, proc_income_stmt_yearly, data]
     
     def get_cash_flow_yearly(self, data):
@@ -84,18 +85,20 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     cash_flow_yearly = ticker.get_cash_flow(freq='yearly')
-                    if not cash_flow_yearly.empty:
-                        data[1]['yearly'] = pd.concat([data[1]['yearly'], cash_flow_yearly])
-                        data[2] = 'ok'
+                    if not isinstance(cash_flow_yearly, type(None)) and cash_flow_yearly.shape[0] > 0:
+                        data[1]['cash_flow_yearly'] = cash_flow_yearly
+                    else:
+                        data[2]['cash_flow_yearly'] = 'no cash_flow_yearly'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
                         time.sleep(60)
                         continue
+                    else:
+                        data[2]['cash_flow_yearly'] = str(e)
                 break
             return data
         # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
-        if not data[0]: return [False, proc_cash_flow_yearly, data]
         return [True, proc_cash_flow_yearly, data]
     
     def get_balance_sheet_yearly(self, data):
@@ -103,18 +106,20 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     balance_sheet_yearly = ticker.get_balance_sheet(freq='yearly')
-                    if not balance_sheet_yearly.empty:
-                        data[1]['yearly'] = pd.concat([data[1]['yearly'], balance_sheet_yearly])
-                        data[2] = 'ok'
+                    if not isinstance(balance_sheet_yearly, type(None)) and balance_sheet_yearly.shape[0] > 0:
+                        data[1]['balance_sheet_yearly'] = balance_sheet_yearly
+                    else:
+                        data[2]['balance_sheet_yearly'] = 'no balance_sheet_yearly'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
                         time.sleep(60)
                         continue
+                    else:
+                        data[2]['balance_sheet_yearly'] = str(e)
                 break
             return data
         # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
-        if not data[0]: return [False, proc_balance_sheet_yearly, data]
         return [True, proc_balance_sheet_yearly, data]
 
     def get_income_stmt_quarterly(self, data):
@@ -122,18 +127,20 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     income_stmt_quarterly = ticker.get_income_stmt(freq='quarterly')
-                    if not income_stmt_quarterly.empty:
-                        data[1]['quarterly'] = income_stmt_quarterly
-                        data[2] = 'ok'
+                    if not isinstance(income_stmt_quarterly, type(None)) and income_stmt_quarterly.shape[0] > 0:
+                        data[1]['income_stmt_quarterly'] = income_stmt_quarterly
+                    else:
+                        data[2]['income_stmt_quarterly'] = 'no income_stmt_quarterly'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
                         time.sleep(60)
                         continue
+                    else:
+                        data[2]['income_stmt_quarterly'] = str(e)
                 break
             return data
         # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
-        if not data[0]: return [False, proc_income_stmt_quarterly, data]
         return [True, proc_income_stmt_quarterly, data]
     
     def get_cash_flow_quarterly(self, data):
@@ -141,18 +148,20 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     cash_flow_quarterly = ticker.get_cash_flow(freq='quarterly')
-                    if not cash_flow_quarterly.empty:
-                        data[1]['quarterly'] = pd.concat([data[1]['quarterly'], cash_flow_quarterly])
-                        data[2] = 'ok'
+                    if not isinstance(cash_flow_quarterly, type(None)) and cash_flow_quarterly.shape[0] > 0:
+                        data[1]['cash_flow_quarterly'] = cash_flow_quarterly
+                    else:
+                        data[2]['cash_flow_quarterly'] = 'no cash_flow_quarterly'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
                         time.sleep(60)
                         continue
+                    else:
+                        data[2]['cash_flow_quarterly'] = str(e)
                 break
             return data
         # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
-        if not data[0]: return [False, proc_cash_flow_quarterly, data]
         return [True, proc_cash_flow_quarterly, data]
     
     def get_balance_sheet_quarterly(self, data):
@@ -160,18 +169,20 @@ class YahooF_Fundamental(YahooF):
             while True:
                 try:
                     balance_sheet_quarterly = ticker.get_balance_sheet(freq='quarterly')
-                    if not balance_sheet_quarterly.empty:
-                        data[1]['quarterly'] = pd.concat([data[1]['quarterly'], balance_sheet_quarterly])
-                        data[2] = 'ok'
+                    if not isinstance(balance_sheet_quarterly, type(None)) and balance_sheet_quarterly.shape[0] > 0:
+                        data[1]['balance_sheet_quarterly'] = balance_sheet_quarterly
+                    else:
+                        data[2]['balance_sheet_quarterly'] = 'no balance_sheet_quarterly'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  info: Rate Limeit: wait 60 seconds')
                         time.sleep(60)
                         continue
+                    else:
+                        data[2]['balance_sheet_quarterly'] = str(e)
                 break
             return data
         # decide if we need to run this yfinace proc, the yfinance proc to run and the current data
-        if not data[0]: return [False, proc_balance_sheet_quarterly, data]
         return [True, proc_balance_sheet_quarterly, data]
 
     def __init__(self, key_values=[], data_names=[], update = False, forced=False):
@@ -192,7 +203,9 @@ class YahooF_Fundamental(YahooF):
 
         # check what symbols need to be updated
         updates = self.update_check(key_values, forced=forced)
-        if len(updates['trailing']) == 0: return
+        for update, symbols in updates.items():
+            print(update, len(symbols))
+        if len(updates['all']) == 0: return
 
         # leave if yfinance limit rate
         if not yfinancetest():
@@ -206,11 +219,11 @@ class YahooF_Fundamental(YahooF):
         self.logger.info('YahooF:  Fundamental: %s' % self.db.backup())
 
         exec_list = []
-        for symbol in updates['trailing']:
-            exec_entity = [symbol, [
-                    self.get_income_stmt_trailing,
-                    self.get_cash_flow_trailing,
-                ], {'ticker': None, 'data': [False, {}, '']}]
+        for symbol in updates['all']:
+            exec_entity = [symbol, [], {'ticker': None, 'data': [False, {}, {}]}]
+            if symbol in updates['trailing']:
+                exec_entity[1].append(self.get_income_stmt_trailing)
+                exec_entity[1].append(self.get_cash_flow_trailing)
             if symbol in updates['yearly']:
                 exec_entity[1].append(self.get_income_stmt_yearly)
                 exec_entity[1].append(self.get_cash_flow_yearly)
@@ -233,6 +246,7 @@ class YahooF_Fundamental(YahooF):
             updates['trailing'] = symbols
             updates['yearly'] = symbols
             updates['quarterly'] = symbols
+            updates['all'] = sorted(symbols)
             return updates
 
         
@@ -271,18 +285,44 @@ class YahooF_Fundamental(YahooF):
         update_quarterly = update_five_days & update_quarterly
         updates['quarterly'] = set(status_db[update_quarterly].index).union(missing_symbols)
 
-        # print(status_db[update_trailing][['last_timestamp_trailing_str', 'last_timestamp_yearly_str', 'last_timestamp_quarterly_str']])
-
-        # print(update_trailing)
-        # print(update_yearly)
-        # print(update_quarterly)
-
+        updates['all'] = sorted(updates['trailing'].union(updates['yearly']).union(updates['quarterly']))
+       
         return updates
-    
+
     def push_api_data(self, symbol, result):
-        found = result[0]
-        message = result[2]
-        result = result[1]
+        errors = result[2]
+        result_data = result[1]
+
+        found = False
+
+        periods = {}
+        periods['trailing'] = pd.DataFrame()
+        if 'income_stmt_trailing' in result_data:
+            periods['trailing'] = pd.concat([periods['trailing'], result_data['income_stmt_trailing']])
+
+        if 'cash_flow_trailing' in result_data:
+            periods['trailing'] = pd.concat([periods['trailing'], result_data['cash_flow_trailing']])
+
+        periods['yearly'] = pd.DataFrame()
+        if 'income_stmt_yearly' in result_data:
+            periods['yearly'] = pd.concat([periods['yearly'], result_data['income_stmt_yearly']])
+
+        if 'cash_flow_yearly' in result_data:
+            periods['yearly'] = pd.concat([periods['yearly'], result_data['cash_flow_yearly']])
+
+        if 'balance_sheet_yearly' in result_data:
+            periods['yearly'] = pd.concat([periods['yearly'], result_data['balance_sheet_yearly']])
+
+        periods['quarterly'] = pd.DataFrame()
+        if 'income_stmt_quarterly' in result_data:
+            periods['quarterly'] = pd.concat([periods['quarterly'], result_data['income_stmt_quarterly']])
+
+        if 'cash_flow_quarterly' in result_data:
+            periods['quarterly'] = pd.concat([periods['quarterly'], result_data['cash_flow_quarterly']])
+
+        if 'balance_sheet_quarterly' in result_data:
+            periods['quarterly'] = pd.concat([periods['quarterly'], result_data['balance_sheet_quarterly']])
+
 
         timestamp = int(datetime.now().timestamp())
         status = {
@@ -294,46 +334,53 @@ class YahooF_Fundamental(YahooF):
             'last_timestamp_yearly_str': '',
             'last_timestamp_quarterly': 0,
             'last_timestamp_quarterly_str': '',
-            'found': found,
-            'message': str(message)
+            'found': False,
+            'message': '',
         }
 
-        if not found:
-            status = pd.DataFrame([status], index=[symbol])
-            status.index.name = 'symbol'
-            self.db.table_write('status_db', status)
-            return
+        for period, df in periods.items():
+            if df.shape[0] > 0:
+                found = True
+                df = df.T.infer_objects()
+                df.index = df.index.tz_localize(None)
+                df.index = df.index.astype('int64') // 10**9
+                df.index.name = 'timestamp'
+                df.sort_index(inplace=True)
+                df = df.copy() # to avoid 'DataFrame is highly fragmented'
+                if period == 'trailing':
+                    if df.shape[0] > 1:
+                        df.iloc[-1] = df.sum()
+                        df = df.iloc[-1:]
+                    df.reset_index(inplace=True)
+                    df.index = [symbol]
+                    df.index.name = 'symbol'
+                    self.db.table_write('trailing', df)
+                    status['last_timestamp_trailing'] = int(df.iloc[0]['timestamp'])
+                    status['last_timestamp_trailing_str'] = str(pd.to_datetime(status['last_timestamp_trailing'], unit='s'))
+                else:
+                    self.db.table_write_reference(symbol, period, df, update=False)
+                    status['last_timestamp_%s' % period] = int(df.index[-1])
+                    status['last_timestamp_%s_str' % period] = str(pd.to_datetime(status['last_timestamp_%s' % period], unit='s'))
         
-        for period, df in result.items():
-            df = df.T.infer_objects()
-            df.index = df.index.tz_localize(None)
-            df.index = df.index.astype('int64') // 10**9
-            df.index.name = 'timestamp'
-            df.sort_index(inplace=True)
-            df = df.copy() # to avoid 'DataFrame is highly fragmented'
-            if period == 'trailing':
-                if df.shape[0] > 1:
-                    df.iloc[-1] = df.sum()
-                    df = df.iloc[-1:]
-                df.reset_index(inplace=True)
-                df.index = [symbol]
-                df.index.name = 'symbol'
-                self.db.table_write('trailing', df)
-                status['last_timestamp_trailing'] = int(df.iloc[0]['timestamp'])
-                status['last_timestamp_trailing_str'] = str(pd.to_datetime(status['last_timestamp_trailing'], unit='s'))
-            elif period == 'yearly':
-                self.db.table_write_reference(symbol, 'yearly', df, update=False)
-                status['last_timestamp_yearly'] = int(df.index[-1])
-                status['last_timestamp_yearly_str'] = str(pd.to_datetime(status['last_timestamp_yearly'], unit='s'))
-            elif period == 'quarterly':
-                self.db.table_write_reference(symbol, 'quarterly', df, update=False)
-                status['last_timestamp_quarterly'] = int(df.index[-1])
-                status['last_timestamp_quarterly_str'] = str(pd.to_datetime(status['last_timestamp_quarterly'], unit='s'))
-        
-        # write status
+        # update status and write
+        status['found'] = found
+        if found:
+            status['message'] = 'ok'
+        else:
+            for data_type, error in errors.items():
+                status['message'] = '%s: %s' % (data_type, error)
+                break
         status = pd.DataFrame([status], index=[symbol])
         status.index.name = 'symbol'
         self.db.table_write('status_db', status)
+        
+        # check if failed on log
+        result[0] = found
+
+        print(symbol, found,
+            'trailing[%s]' % periods['trailing'].shape[0],
+            'yearly[%s]' % periods['yearly'].shape[0],
+            'quarterly[%s]' % periods['quarterly'].shape[0])
 
     def get_vault_data(self, data_name, columns, key_values):
         if data_name == 'trailing':
