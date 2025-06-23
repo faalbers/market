@@ -2,7 +2,7 @@ import logging.handlers
 import multiprocessing, logging, sys, traceback
 from .tickers import Tickers
 from .vault import Vault
-from .analysis import Analysis
+from .analysis import Analysis, Analysis_GUI
 from .utils import yfinancetest
 from datetime import datetime
 import calendar
@@ -77,6 +77,9 @@ class Market():
 
     def get_analysis(self, tickers, update=False, forced=False):
         return Analysis(tickers, update=update, forced=forced)
+    
+    def analysis_gui(self, symbols=[]):
+        return Analysis_GUI(symbols)
 
     def get_quicken(self, qif_file):
         return Quicken(qif_file)
