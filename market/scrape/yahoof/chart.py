@@ -25,18 +25,19 @@ class YahooF_Chart(YahooF):
             while True:
                 try:
                     chart = ticker.history(period="10y",auto_adjust=False)
-                    data = chart
+                    if not isinstance(chart, type(None)) and chart.shape[0] > 0:
+                        data[1]['chart'] = chart
+                    else:
+                        data[2]['chart'] = 'no chart'
                 except Exception as e:
                     if str(e) == 'Too Many Requests. Rate limited. Try after a while.':
                         self.logger.info('YahooF:  chart: Rate Limeit: wait 60 seconds')
                         time.sleep(60)
                         continue
                     else:
-                        return ([False, data, e])
+                        data[2]['info'] = str(e)
                 break
-            if chart.shape[0] == 0:
-                return ([False, data, 'empty'])
-            return ([True, data, 'ok'])
+            return data
         return [True, proc_chart, data]
 
     def __init__(self, key_values=[], data_names=[], update = False, forced=False):
@@ -85,10 +86,11 @@ class YahooF_Chart(YahooF):
         # backup first
         self.logger.info('YahooF:  Chart: %s' % self.db.backup())
 
-        exec_list = [
-            [symbol, [
-                    self.get_chart,
-                ], {'ticker': None, 'data': None}] for symbol in symbols]
+        exec_list = []
+        for symbol in symbols:
+            exec_entity = [symbol, [], {'ticker': None, 'data': [False, {}, {}]}]
+            exec_entity[1].append(self.get_chart)
+            exec_list.append(exec_entity)
         self.multi_execs(exec_list)
 
     def update_check(self, symbols):
@@ -122,38 +124,50 @@ class YahooF_Chart(YahooF):
         return sorted(not_read.union(status_check))
 
     def push_api_data(self, symbol, result):
-        found = result[0]
-        message = result[2]
-        result = result[1]
-        
+        errors = result[2]
+        result_data = result[1]
+
+        found = False
         timestamp = int(datetime.now().timestamp())
+
+        last_timestamp = 0
+        last_timestamp_str = ''
+        if 'chart' in result_data:
+            found = True
+            # take out utc time of indices and change them to timestamps, rename index
+            result_data['chart'].index = result_data['chart'].index.tz_localize(None)
+            result_data['chart'].index = result_data['chart'].index.astype('int64') // 10**9
+            result_data['chart'].index.name = 'timestamp'
+            last_timestamp = int(result_data['chart'].index[-1])
+            last_timestamp_str = str(pd.to_datetime(last_timestamp, unit='s'))
+            self.db.table_write_reference(symbol, 'chart', result_data['chart'], replace=True)
+        
+        # make status_db
+        message = 'ok'
+        if not found:
+            for data_type, error in errors.items():
+                message = '%s: %s' % (data_type, error)
+                break
         status = {
             'timestamp': timestamp,
             'timestamp_str': str(datetime.fromtimestamp(timestamp)),
-            'last_timestamp': 0,
-            'last_timestamp_str': '',
+            'last_timestamp': last_timestamp,
+            'last_timestamp_str': last_timestamp_str,
             'found': found,
             'message': str(message)
         }
-        if not found:
-            status = pd.DataFrame([status], index=[symbol])
-            status.index.name = 'symbol'
-            self.db.table_write('status_db', status)
-            return
-
-        # take out utc time of indices and change them to timestamps, rename index
-        result.index = result.index.tz_localize(None)
-        result.index = result.index.astype('int64') // 10**9
-        result.index.name = 'timestamp'
-        self.db.table_write_reference(symbol, 'chart', result, replace=True)
-        
-        # write status
-        status['last_timestamp'] = int(result.index[-1])
-        status['last_timestamp_str'] = str(pd.to_datetime(status['last_timestamp'], unit='s'))
         status = pd.DataFrame([status], index=[symbol])
         status.index.name = 'symbol'
         self.db.table_write('status_db', status)
         
+        # check if failed on log
+        result[0] = found
+
+        if 'chart' in result_data:
+            print(symbol, result_data['chart'].shape[0], found)
+        else:
+            print(symbol, None, found)
+
     def cache_data(self, symbols):
         # update cache if needed
         db_storage = 'database/%s' % self.dbName
