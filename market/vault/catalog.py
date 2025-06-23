@@ -6,10 +6,10 @@ class Catalog():
 
     catalog = {
         'update_data': {
-            # FMP_Stocklist: {'stocklist': [],},
-            # Polygon_Tickers: {'tickers': []},
-            # Fred: {'fred': []},
-            # File_Files: {'mic': [], 'country': [],},
+            FMP_Stocklist: {'stocklist': [],},
+            Polygon_Tickers: {'tickers': []},
+            Fred: {'fred': []},
+            File_Files: {'mic': [], 'country': [],},
             Polygon_News: {'news_polygon': [],},
         },
         'update_symbols_all': {
@@ -17,8 +17,8 @@ class Catalog():
         },
         'update_symbols_info': {
             Finviz_Ticker_News: {'news_finviz': [],},
-            # Etrade_Quote: {'quote': [],},
-            # YahooF_Chart: {'chart': [],},
+            Etrade_Quote: {'quote': [],},
+            YahooF_Chart: {'chart': [],},
         },
         'update_symbols_equity': {
             YahooF_Fundamental: {'fundamental': [],},
@@ -128,9 +128,11 @@ class Catalog():
         'analysis': {
             YahooF_Info: {
                 'info': [
-                    ['timestamp', 'data_time'],
+                    ['trailingPE', 'pe'],
+                    ['priceToSalesTrailing12Months', 'ps_ttm'],
+                    # ['timestamp', 'data_time'],
                     # ['epsCurrentYear', 'eps_current_year'],
-                    # ['epsTrailingTwelveMonths', 'eps_trailing'],
+                    # ['epsTrailingTwelveMonths', 'eps_ttm'],
                     # ['epsForward', 'eps_forward'],
 
                     # ['revenuePerShare', 'revenue_per_share'],
@@ -139,16 +141,16 @@ class Catalog():
                     # ['earningsGrowth', 'earnings_growth'],
                     # ['earningsQuarterlyGrowth', 'earnings_growth_quarterly'],
 
-                    # ['trailingPE', 'pe_trailing'],
+                    # ['trailingPE', 'pe_ttm'],
                     # ['forwardPE', 'pe_forward'],
 
-                    # ['trailingPegRatio', 'peg_trailing'],
+                    # ['trailingPegRatio', 'peg_ttm'],
 
                     # ['lastDividendValue', 'dividend_last'],
                     # ['dividendYield', 'dividend_yield'],
-                    # ['trailingAnnualDividendYield', 'dividend_yield_trailing'],
+                    # ['trailingAnnualDividendYield', 'dividend_yield_ttm'],
                     # ['dividendRate', 'dividend_rate'],
-                    # ['trailingAnnualDividendRate', 'dividend_rate_trailing'],
+                    # ['trailingAnnualDividendRate', 'dividend_rate_ttm'],
                     # ['dividendDate', 'dividend_date_execution'],
                     # ['exDividendDate', 'dividend_date_record'],
                     # ['lastDividendDate', 'dividend_date_record_last'],
@@ -166,29 +168,37 @@ class Catalog():
 
                 ],
             },
-            # YahooF_Fundamental: {
-            #     'trailing': [
-            #         ['TotalRevenue', 'revenue_total'],
-            #         ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-            #         ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
-            #         ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
-            #         ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
-            #     ],
-            #     'yearly': [
-            #         ['TotalRevenue', 'revenue_total'],
-            #         ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-            #         ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
-            #         ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
-            #         ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
-            #     ],
-            #     'quarterly': [
-            #         ['TotalRevenue', 'revenue_total'],
-            #         ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-            #         ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
-            #         ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
-            #         ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
-            #     ],
-            # },
+            YahooF_Fundamental: {
+                'trailing': [
+                    ['TotalRevenue', 'revenue_total'],
+                    ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
+                    # ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
+                    # ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
+                    # ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
+                    # ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
+                ],
+                'yearly': [
+                    ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
+                    ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
+                    ['CurrentLiabilities', 'liabilities_current'],
+                    ['CurrentAssets', 'assets_current'],
+
+                    ['TotalRevenue', 'revenue_total'],
+                    ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
+                    ['FreeCashFlow', 'free_cash_flow'],
+                    # ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
+                ],
+                'quarterly': [
+                    ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
+                    ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
+                    ['CurrentLiabilities', 'liabilities_current'],
+                    ['CurrentAssets', 'assets_current'],
+
+                    ['TotalRevenue', 'revenue_total'],
+                    ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
+                    ['FreeCashFlow', 'free_cash_flow'],
+                ],
+            },
             # Etrade_Quote: {
             #     'quote': [
             #         ['symbol', 'etrade_symbol'],

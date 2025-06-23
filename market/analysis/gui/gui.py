@@ -42,11 +42,13 @@ class Analysis_GUI(tk.Tk):
     def get_filtered(self):
         filters = self.frame_filters.get_filters()
         select = pd.Series(True, index=self.analysis.data.index)
+        columns = set()
         for filter in filters:
             or_filters = [filter['and']] + filter['or']
             or_select = pd.Series(False, index=self.analysis.data.index)
             for or_filter in or_filters:
                 column = or_filter[0]
+                columns.add(column)
                 function = or_filter[1]
                 value = or_filter[2]
                 if value.isnumeric():
@@ -88,12 +90,16 @@ class Analysis_GUI(tk.Tk):
                     
             select = select & or_select
 
-        return self.analysis.data[select].index
+        return (self.analysis.data[select].index, columns)
     
     def analyze(self):
-        print('analyze')
-        symbols = self.get_filtered()
-        Analysis_Selection_GUI(self, symbols)
+        symbols, columns = self.get_filtered()
+        if len(columns) == 0:
+            columns = ['symbol'] + self.analysis.data.columns.tolist()
+        else:
+            columns.discard('symbol')
+            columns = ['symbol'] + list(columns)
+        Analysis_Selection_GUI(self, symbols, columns)
 
 class Frame_Filters(tk.Frame):
     def __init__(self, parent):

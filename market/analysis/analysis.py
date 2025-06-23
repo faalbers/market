@@ -72,126 +72,93 @@ class Analysis():
         values = [v for s,v in values.items() if v != None]
         return sorted(values)
 
-    def find(self, settings):
-        # filters:
-        # '>', '<', '=', '*'
-        # '*' is exists
-        # add '!' in front of each individualto invert
-        # add '! ' in front of full collection to invert
-        print(self.data)
-        all_symbols = self.data.index.to_list()
-        all_df = pd.DataFrame(index=all_symbols)
-        for filter in settings['filter']:
-            filter_name = '%s_%s_%s' % tuple(filter)
-            print(filter_name)
-            # find the columns that need to be searched
-            if filter[0] in self.data.columns:
-                found_values = self.data[filter[0]].dropna()
-            else:
-                found_values = pd.Series()
-            # found_values = self.get_values(filter[0])
-            # found_values = pd.Series(found_values).dropna()
-
-            # get filter chars and se if we need to totally negate
-            filter_chars = filter[1]
-            filter_value = filter[2]
-            filter_negate = False
-            if filter_chars.startswith('! '):
-                filter_negate = True
-                filter_chars = filter_chars[2:]
-                      
-            # create filter blocks, [negate, char]
-            filter_blocks = []
-            current_filter_block = [False, '']
-            for filter_char in filter_chars:
-                if filter_char == '!':
-                    current_filter_block[0] = True
-                    continue
-                current_filter_block[1] = filter_char
-                filter_blocks.append(current_filter_block)
-                current_filter_block = [False, '']
-            
-            filter_df = pd.DataFrame(index=all_symbols)
-            for filter_block in filter_blocks:
-                negate = filter_block[0]
-                filter_char = filter_block[1]
-
-                if filter_char == '=':
-                    if negate:
-                        column_name = '!%s' % filter_char
-                        filter_df[column_name] = True
-                        filter_df.loc[found_values.index, column_name] = (found_values != filter_value)
-                    else:
-                        column_name = filter_char
-                        filter_df[column_name] = False
-                        filter_df.loc[found_values.index, column_name] = (found_values == filter_value)
-                if filter_char == '>':
-                    if negate:
-                        column_name = '!%s' % filter_char
-                        filter_df[column_name] = True
-                        filter_df.loc[found_values.index, column_name] = (found_values <= filter_value)
-                    else:
-                        column_name = filter_char
-                        filter_df[column_name] = False
-                        filter_df.loc[found_values.index, column_name] = (found_values > filter_value)
-                if filter_char == '<':
-                    if negate:
-                        column_name = '!%s' % filter_char
-                        filter_df[column_name] = True
-                        filter_df.loc[found_values.index, column_name] = (found_values >= filter_value)
-                    else:
-                        column_name = filter_char
-                        filter_df[column_name] = False
-                        filter_df.loc[found_values.index, column_name] = (found_values < filter_value)
-                if filter_char == '*':
-                    if negate:
-                        column_name = '!%s' % filter_char
-                        filter_df[column_name] = True
-                        filter_df.loc[found_values.index, column_name] = False
-                    else:
-                        column_name = filter_char
-                        filter_df[column_name] = False
-                        filter_df.loc[found_values.index, column_name] = True
-            all_df[filter_name] = filter_df.any(axis=1)
-        result = all_df.all(axis=1)
-        # return list(result[result == True].index)
-        return self.data.loc[result[result == True].index].copy()
-
     def __get_data(self, update, forced):
         # get data
-        profile = self.tickers.get_profiles(update=update, forced=forced)
+        self.data = self.tickers.get_profiles(update=update, forced=forced)
         analysis = self.tickers.get_analysis(update=update, forced=forced)
+        
+        # merge info
+        self.data = self.data.merge(analysis['info'], how='left', left_index=True, right_index=True)
+        # fix 'infinity'
+        self.data.loc[self.data['pe'].apply(lambda x: isinstance(x, str)), 'pe'] = np.nan
+        self.data.loc[self.data['ps_ttm'].apply(lambda x: isinstance(x, str)), 'ps_ttm'] = np.nan
 
-        # merge into one dataframe
-        analysis['info']['data_time'] = pd.to_datetime(analysis['info']['data_time'], unit='s').dt.tz_localize('UTC').dt.tz_convert('US/Pacific')
-        self.data = profile.merge(analysis['info'], how='left', left_index=True, right_index=True)
+        # analysis['info']['data_time'] = pd.to_datetime(analysis['info']['data_time'], unit='s').dt.tz_localize('UTC').dt.tz_convert('US/Pacific')
+        # self.data = profile.merge(analysis['info'], how='left', left_index=True, right_index=True)
 
-        # get sector charts
-        sectors = {
-            'XLV': 'Healthcare',
-            'XLB': 'Basic Materials',
-            'XLK': 'Technology',
-            'XLF': 'Financial Services',
-            'XLI': 'Industrials',
-            'XLRE': 'Real Estate',
-            'XLC': 'Communication Services',
-            'XLU': 'Utilities',
-            'XLE': 'Energy',
-            'XLP': 'Consumer Defensive',
-            'XLY': 'Consumer Cyclical',
-            'SPY': 'S&P500',
-        }
-        sector_tickers = Tickers(list(sectors.keys()))
-        sector_charts = sector_tickers.get_charts(update=update, forced=forced)
-        self.sector_indices = sector_charts['SPY'][['Close']]
-        self.sector_indices = self.sector_indices.rename(columns={'Close': 'S&P500'})
-        for sector_symbol, sector in sectors.items():
-            if sector_symbol == 'SPY': continue
-            if not sector_symbol in sector_charts:
-                raise Exception('sector ticker not found: %s' % sector_symbol)
-            self.sector_indices = self.sector_indices.join(sector_charts[sector_symbol]['Close'])
-            self.sector_indices = self.sector_indices.rename(columns={'Close': sector})
-        # pp(self.sector_indices.round(2))
+        # merge last year fundamentals
+        yearly = pd.DataFrame()
+        for symbol, yearly_symbol in analysis['yearly'].items():
+            # free cashflow trends
+            free_cash_flow = None
+            if 'free_cash_flow' in yearly_symbol:
+                free_cash_flow = yearly_symbol['free_cash_flow'].dropna()
+                free_cash_flow = (free_cash_flow / free_cash_flow.iloc[0]).mean()
+
+            # last year entries
+            yearly_symbol = yearly_symbol.tail(1).copy()
+            yearly_symbol.index = [symbol]
+            yearly_symbol.index.name = 'symbol'
+            if free_cash_flow != None: yearly_symbol['free_cash_flow_trend_yearly'] = free_cash_flow
+            yearly = pd.concat([yearly,  yearly_symbol.tail(1)])
+        yearly['debt_v_cash_year'] = yearly['debt_current'] / yearly['cash']
+        yearly['liquidity_year'] = yearly['assets_current'] / yearly['liabilities_current']
+        yearly['net_profit_margin_year'] = yearly['income_net'] / yearly['revenue_total']
+        columns_keep = ['debt_v_cash_year', 'liquidity_year', 'net_profit_margin_year', 'free_cash_flow_trend_yearly']
+        columns = [c for c in yearly.columns if c in columns_keep]
+        yearly = yearly[columns]
+        self.data = self.data.merge(yearly, how='left', left_index=True, right_index=True)
+        
+        # merge last quarter fundamentals
+        quarterly = pd.DataFrame()
+        for symbol, quarterly_symbol in analysis['quarterly'].items():
+            # free cashflow trends
+            free_cash_flow = None
+            if 'free_cash_flow' in quarterly_symbol:
+                free_cash_flow = quarterly_symbol['free_cash_flow'].dropna()
+                free_cash_flow = (free_cash_flow / free_cash_flow.iloc[0]).mean()
+
+            # last quarter entries
+            quarterly_symbol = quarterly_symbol.tail(1).copy()
+            quarterly_symbol.index = [symbol]
+            quarterly_symbol.index.name = 'symbol'
+            if free_cash_flow != None: quarterly_symbol['free_cash_flow_trend_quarterly'] = free_cash_flow
+            quarterly = pd.concat([quarterly,  quarterly_symbol.tail(1)])
+        quarterly['debt_v_cash_quarter'] = quarterly['debt_current'] / quarterly['cash']
+        quarterly['liquidity_quarter'] = quarterly['assets_current'] / quarterly['liabilities_current']
+        quarterly['net_profit_margin_quarter'] = quarterly['income_net'] / quarterly['revenue_total']
+        columns_keep = ['debt_v_cash_quarter', 'liquidity_quarter', 'net_profit_margin_quarter', 'free_cash_flow_trend_quarterly']
+        columns = [c for c in quarterly.columns if c in columns_keep]
+        quarterly = quarterly[columns]
+        self.data = self.data.merge(quarterly, how='left', left_index=True, right_index=True)
+
+
+        # # get sector charts
+        # sectors = {
+        #     'XLV': 'Healthcare',
+        #     'XLB': 'Basic Materials',
+        #     'XLK': 'Technology',
+        #     'XLF': 'Financial Services',
+        #     'XLI': 'Industrials',
+        #     'XLRE': 'Real Estate',
+        #     'XLC': 'Communication Services',
+        #     'XLU': 'Utilities',
+        #     'XLE': 'Energy',
+        #     'XLP': 'Consumer Defensive',
+        #     'XLY': 'Consumer Cyclical',
+        #     'SPY': 'S&P500',
+        # }
+        # sector_tickers = Tickers(list(sectors.keys()))
+        # sector_charts = sector_tickers.get_charts(update=update, forced=forced)
+        # self.sector_indices = sector_charts['SPY'][['Close']]
+        # self.sector_indices = self.sector_indices.rename(columns={'Close': 'S&P500'})
+        # for sector_symbol, sector in sectors.items():
+        #     if sector_symbol == 'SPY': continue
+        #     if not sector_symbol in sector_charts:
+        #         raise Exception('sector ticker not found: %s' % sector_symbol)
+        #     self.sector_indices = self.sector_indices.join(sector_charts[sector_symbol]['Close'])
+        #     self.sector_indices = self.sector_indices.rename(columns={'Close': sector})
+        # # pp(self.sector_indices.round(2))
 
     # def get_params(self):
     #     def fix_key(key):
@@ -291,116 +258,5 @@ class Analysis():
     #     # market.
     #     # 4. **P/E Ratio > 30:** Typically indicates an overvalued stock with limited potential for growth.        
 
-    # def test_equity(self):
-    #     find_settings = {
-    #         'filter': [
-    #             [['type'] , '=' , 'EQUITY'],
-    #             # [['dividend_yield'] , '>' , 10.0],
-    #         ],
-    #     }
-    #     symbols = self.find(find_settings)
-    #     pp(len(symbols))
-    
-    # def test_mutual_fund(self):
-    #     find_settings = {
-    #         'filter': [
-    #             [['type'] , '=' , 'MUTUALFUND'],
-    #             [['fund_data', 'fund_overview', 'categoryName'], '=', 'Technology'],
-    #             [['expense_ratio'] , '<' , 1.0],
-    #         ],
-    #     }
-    #     symbols = self.find(find_settings)
-    #     pp(len(symbols))
-    #     for symbol in symbols:
-    #         print(symbol, self.symbols[symbol]['expense_ratio'], self.symbols[symbol]['name'])
-
-    # def test_etf(self):
-    #     find_settings = {
-    #         'filter': [
-    #             [['type'] , '=' , 'ETF'],
-    #         ],
-    #     }
-    #     symbols = self.find(find_settings)
-    #     pp(len(symbols))
-
-    # def index_fund(self):
-    #     find_settings = {
-    #         'filter': [
-    #             [['type'] , '=' , 'INDEX'],
-    #         ],
-    #     }
-    #     symbols = self.find(find_settings)
-    #     pp(len(symbols))
-
-
-    # def get_types(self, symbol_types, invert=False):
-    #     symbols = set()
-    #     for symbol, symbol_data in self.symbols.items():
-    #         if symbol_data['type'] in symbol_types:
-    #             symbols.add(symbol)
-    #     if invert:
-    #         symbols = set(self.symbols.keys()).difference(symbols)
-    #     return sorted(symbols)
-
-    # def types(self):
-    #     types = set()
-    #     for symbol, symbol_data in self.symbols.items():
-    #         types.add(symbol_data['type'])
-    #     return sorted(types)
-
-    # def get_sectors_industries(self):
-    #     sectors_industries = {}
-    #     for symbol, symbol_data in self.symbols.items():
-    #         if not symbol_data['sector'] in sectors_industries:
-    #             sectors_industries[symbol_data['sector']] = set()
-    #         sectors_industries[symbol_data['sector']].add(symbol_data['industry'])
-    #     return sectors_industries
-
-
-    # def news_sentiment(self):
-    #     start_date = '2023-01-01'
-    #     end_date = '2025-01-31'
-    #     chart = self.tickers.get_chart(start_date, end_date)
-    #     sp_500_growth = self.benchmarks.get_chart(start_date, end_date)['SPY']['adjclose']
-    #     sp_500_growth = (sp_500_growth / sp_500_growth.iloc[0]) - 1.0
-    #     news_sentiment = self.tickers.get_news_sentiment(start_date, end_date)
-    #     test_df = {}
-    #     for symbol in self.tickers.get_symbols():
-    #         if symbol in chart and symbol in news_sentiment:
-    #             symbol_growth = chart[symbol]['adjclose']
-    #             symbol_growth = (symbol_growth / symbol_growth.iloc[0]) - 1.0
-    #             symbol_growth = symbol_growth - sp_500_growth
-    #             ns = news_sentiment[symbol][news_sentiment[symbol].ne('NEUTRAL')]
-    #             df = pd.merge(symbol_growth, ns, left_index=True, right_index=True, how='outer')
-    #             weekly_groups = df.groupby(pd.Grouper(freq='W'))
-    #             df_data = pd.DataFrame()
-    #             for name, group in weekly_groups:
-    #                 df_data.loc[name, 'adjclose'] = group['adjclose'].dropna().mean()
-    #                 value_counts = group['news_sentiment'].value_counts()
-    #                 positive = 0
-    #                 negative = 0
-    #                 if 'POSITIVE' in value_counts:
-    #                     positive = group['news_sentiment'].value_counts()['POSITIVE']
-    #                 if 'NEGATIVE' in value_counts:
-    #                     negative = group['news_sentiment'].value_counts()['NEGATIVE']
-    #                 sentiment = positive + negative
-    #                 if sentiment > 0:
-    #                     sentiment = ((positive / sentiment) * 2.0) - 1.0
-    #                 # df_data.loc[name, 'P'] = positive
-    #                 # df_data.loc[name, 'N'] = negative
-    #                 df_data.loc[name, 'sentiment'] = sentiment
-                
-    #             test_df[symbol] = df_data
-    #     self.viz.plot_timeseries(test_df)
-
-    # def revenue_growth(self):
-    #     # all_tickers = self.tickers.get_all()
-    #     # self.viz.data_keys_text(all_tickers, rename_set=set(self.tickers.get_symbols()), rename_to='symbol')
-        
-    #     # all_other = self.vault.get_data(['all_other'])['all_other']
-    #     # self.viz.data_keys_text(all_other, file_name='data_other_keys')
-
-    #     revenue = self.tickers.get_revenue_growth()
-    #     pp(revenue.keys())
 
 
