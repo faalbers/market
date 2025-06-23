@@ -255,6 +255,8 @@ class YahooF_Info(YahooF):
 
         # check what symbols need to be updated
         updates = self.update_check(key_values, forced=forced)
+        for update, symbols in updates.items():
+            print(update, len(symbols))
         if len(updates['all']) == 0: return
 
         # leave if yfinance limit rate
