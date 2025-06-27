@@ -133,7 +133,7 @@ class Frame_Scroll_Columns(ttk.Frame):
         canvas = tk.Canvas(self,
             bd=0,
             highlightthickness=0,
-            width=200,
+            width=220,
             yscrollcommand=scrollbar.set
         )
         canvas.pack(side='left', fill='both', expand=True)
@@ -157,7 +157,8 @@ class Frame_Columns(tk.Frame):
         for column, state in columns.items():
             self.colums_state[column] = tk.IntVar()
             if state: self.colums_state[column].set(1)
-            check_button = tk.Checkbutton(self, text=column, variable=self.colums_state[column], command=self.check_changed)
+            check_button = tk.Checkbutton(self, text=column, variable=self.colums_state[column],
+                font=("Helvetica", 8), command=self.check_changed)
             # check_button.focus_force()
             new_row = self.grid_size()[1]
             check_button.grid(row=new_row, column=0, sticky=tk.W)
