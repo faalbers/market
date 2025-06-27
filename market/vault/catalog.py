@@ -30,8 +30,8 @@ class Catalog():
                     ['fullExchangeName', 'exchange_name'],
                     ['sectorDisp', 'sector'],
                     ['industryDisp', 'industry'],
-                    ['category', 'etf_category'],
-                    ['fundFamily', 'etf_family'],
+                    # ['category', 'etf_category'],
+                    # ['fundFamily', 'etf_family'],
                 ],
             },
         },
@@ -128,7 +128,11 @@ class Catalog():
         'analysis': {
             YahooF_Info: {
                 'info': [
-                    ['trailingPE', 'pe'],
+                    ['fullExchangeName', 'exchange_name'],
+                    ['sectorDisp', 'sector'],
+                    ['industryDisp', 'industry'],
+                    ['trailingPE', 'pe_ttm'],
+                    ['trailingEps', 'eps_ttm'],
                     ['priceToSalesTrailing12Months', 'ps_ttm'],
                     # ['timestamp', 'data_time'],
                     # ['epsCurrentYear', 'eps_current_year'],
@@ -170,14 +174,15 @@ class Catalog():
             },
             YahooF_Fundamental: {
                 'trailing': [
+                    ['DilutedEPS', 'eps'],
+                    
                     ['TotalRevenue', 'revenue_total'],
                     ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-                    # ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-                    # ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
-                    # ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
-                    # ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
+                    ['OperatingIncome', 'income_operating'],
                 ],
                 'yearly': [
+                    ['DilutedEPS', 'eps'],
+                    
                     ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
                     ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
                     ['CurrentLiabilities', 'liabilities_current'],
@@ -185,10 +190,13 @@ class Catalog():
 
                     ['TotalRevenue', 'revenue_total'],
                     ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
+                    ['OperatingIncome', 'income_operating'],
                     ['FreeCashFlow', 'free_cash_flow'],
                     # ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
                 ],
                 'quarterly': [
+                    ['DilutedEPS', 'eps'],
+                    
                     ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
                     ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
                     ['CurrentLiabilities', 'liabilities_current'],
@@ -196,6 +204,7 @@ class Catalog():
 
                     ['TotalRevenue', 'revenue_total'],
                     ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
+                    ['OperatingIncome', 'income_operating'],
                     ['FreeCashFlow', 'free_cash_flow'],
                 ],
             },

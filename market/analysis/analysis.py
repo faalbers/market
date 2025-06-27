@@ -1,137 +1,181 @@
 from ..tickers import Tickers
-# from ..vault import Vault
+from ..vault import Vault
 from ..viz import Viz
 import pandas as pd
 import numpy as np
 from pprint import pp
 from ..utils import storage
+from ..database import Database
 from datetime import datetime
 import time
 
 class Analysis():
-    @ staticmethod
-    def __get_param(data, param):
-        # recursively go through param keys to find value
-        if isinstance(data, dict):
-            keys = param.split(':')
-            key = keys[0]
-            if key in data:
-                if len(keys) == 1: return data[key]
-                new_param = ':'.join(keys[1:])
-                return Analysis.__get_param(data[key], new_param)
-        return None
 
-    def __init__(self, tickers, update=False, forced=False):
-        self.tickers = tickers
-        self.__get_data(update, forced)
-        return
-        self.viz = Viz()
+    def __init__(self, symbols=[], update=False, forced=False):
+        self.db = Database('analysis')
+        self.vault = Vault()
+        self.__get_data(symbols, update, forced)
+        # self.viz = Viz()
         # self.benchmarks = Tickers(['SPY', 'QQQ'])
 
-    def test(self, symbol, date):
-        if not symbol in self.symbols: return
-        symbol_data = self.symbols[symbol]
-        if symbol_data['type'] != 'EQUITY': return
-        if symbol_data['sector'] == None: return
-        sector = symbol_data['sector']
-        # df = self.sector_indices[[sector]].loc[date:]
-        df = self.sector_indices[[sector]]
-        df_symbol = self.charts[symbol]['Adj Close']
-        first_date = df_symbol.index[0]
-        df = df.join(self.charts[symbol]['Adj Close'])
-        df = df.loc[first_date:].loc[date:]
-        df['Adj Close'] = df['Adj Close'].ffill()
-        df = df.rename(columns={'Adj Close': symbol})
-        # df = (df / df.iloc[0]) - 1.0
-        df = (df / df.iloc[0])
-        print(df)
-        self.viz.plot_dataframe(df-1.0, line=0.0)
-        df['compare'] = (df[symbol]/df[sector])-1.0
-        df['follow'] = (df[symbol]-1.0)/(df[sector]-1.0)
-        df['follow'] = df['follow'].clip(lower=-10, upper=10)
-        self.viz.plot_dataframe(df[['compare']], line=0.0)
-        self.viz.plot_dataframe(df[['follow']], line=0.0)
+    def __cache_update(self, symbols, update, forced):
+        tickers = Tickers(symbols)
+        data = tickers.get_symbols_dataframe()
+        if data.empty: return data
+        analysis = tickers.get_analysis(update=update, forced=forced)
 
-        
-
-    
-    def get_values(self, param, symbols=[], only_values=False):
-        values = {}
-        if len(symbols) > 0:
-            for symbol in symbols:
-                if symbol not in self.symbols: continue
-                symbol_data = self.symbols[symbol]
-                value = Analysis.__get_param(symbol_data, param)
-                values[symbol] = value
-        else:
-            for symbol, symbol_data in self.symbols.items():
-                value = Analysis.__get_param(symbol_data, param)
-                values[symbol] = value
-        if not only_values:
-            return values
-        values = [v for s,v in values.items() if v != None]
-        return sorted(values)
-
-    def __get_data(self, update, forced):
-        # get data
-        self.data = self.tickers.get_profiles(update=update, forced=forced)
-        analysis = self.tickers.get_analysis(update=update, forced=forced)
-        
         # merge info
-        self.data = self.data.merge(analysis['info'], how='left', left_index=True, right_index=True)
+        data = data.merge(analysis['info'], how='left', left_index=True, right_index=True)
+        
         # fix 'infinity'
-        self.data.loc[self.data['pe'].apply(lambda x: isinstance(x, str)), 'pe'] = np.nan
-        self.data.loc[self.data['ps_ttm'].apply(lambda x: isinstance(x, str)), 'ps_ttm'] = np.nan
+        for column in data.columns[data.apply(lambda x: 'Infinity' in x.values)]:
+            data.loc[data[column] == 'Infinity', column] = np.nan
+
+        # get ttm fundamentals
+        trailing = analysis['trailing'].copy()
+        if 'income_operating' in trailing.columns and 'revenue_total' in trailing.columns:
+            trailing['operating_profit_margin_ttm'] = trailing['income_operating'] / trailing['revenue_total']
+        if 'income_net' in trailing.columns and 'revenue_total' in trailing.columns:
+            trailing['net_profit_margin_ttm'] = trailing['income_net'] / trailing['revenue_total']
+
+        columns_keep = [
+            'eps',
+            'operating_profit_margin_ttm',
+            'net_profit_margin_ttm',
+        ]
+        columns = [c for c in trailing.columns if c in columns_keep]
+        trailing = trailing[columns]
+
+        columns_rename = {
+            'eps': 'eps_ttm_fundamental',
+        }
+        trailing = trailing.rename(columns=columns_rename)
+
+        # get periodic fundamentals
+        yearly = self.__get_fundamentals(analysis, 'yearly')
+        quarterly = self.__get_fundamentals(analysis, 'quarterly')
+
+        # merge them all together
+        data = data.merge(trailing, how='left', left_index=True, right_index=True)
+        data = data.merge(yearly, how='left', left_index=True, right_index=True)
+        data = data.merge(quarterly, how='left', left_index=True, right_index=True)
+
+        # infer al object columns
+        data = data.infer_objects()
+        # pp(data.columns.to_list())
+        # print(data)
+
+        # write to db
+        self.db.table_write('analysis', data)
+
+        return data
+
+    def __get_fundamentals(self, analysis, period):
+        print(period)
+        period_single = period.rstrip('ly')
+        df_period = pd.DataFrame()
+        for symbol, period_symbol in analysis[period].items():
+            period_symbol = period_symbol.dropna(how='all').copy()
+            year_count = period_symbol.shape[0]
+
+            # add metrics
+            if 'debt_current' in period_symbol.columns and 'cash' in period_symbol.columns:
+                period_symbol['debt_v_cash_%s' % (period_single)] = period_symbol['debt_current'] / period_symbol['cash']
+            if 'assets_current' in period_symbol.columns and 'liabilities_current' in period_symbol.columns:
+                period_symbol['liquidity_%s' % (period_single)] = period_symbol['assets_current'] / period_symbol['liabilities_current']
+            if 'income_operating' in period_symbol.columns and 'revenue_total' in period_symbol.columns:
+                period_symbol['operating_profit_margin_%s' % (period_single)] = period_symbol['income_operating'] / period_symbol['revenue_total']
+            if 'income_net' in period_symbol.columns and 'revenue_total' in period_symbol.columns:
+                period_symbol['net_profit_margin_%s' % (period_single)] = period_symbol['income_net'] / period_symbol['revenue_total']
+            if 'free_cash_flow' in period_symbol.columns:
+                period_symbol = period_symbol.rename(columns={'free_cash_flow': 'free_cash_flow_%s' % (period_single)})
+
+            # calculate trends
+            if year_count > 1:
+                trends = period_symbol.apply(lambda x: np.polyfit(range(year_count), x, 1)).head(1)
+                trends = trends / period_symbol.iloc[0]
+                trends.index = [symbol]
+                trends.index.name = 'symbol'
+                rename_trends = {c: '%s_trend' % (c) for c in trends.columns}
+                trends = trends.rename(columns=rename_trends)
+
+            # last year entries
+            period_symbol = period_symbol.tail(1).copy()
+            period_symbol.index = [symbol]
+            period_symbol.index.name = 'symbol'
+            if year_count > 1:
+                period_symbol = period_symbol.merge(trends, how='left', left_index=True, right_index=True)
+            df_period = pd.concat([df_period,  period_symbol])
+        
+        columns_keep = [
+            'eps',
+            'eps_trend',
+            'debt_v_cash_%s' % (period_single),
+            'debt_v_cash_%s_trend' % (period_single),
+            'liquidity_%s' % (period_single),
+            'liquidity_%s_trend' % (period_single),
+            'operating_profit_margin_%s' % (period_single),
+            'operating_profit_margin_%s_trend' % (period_single),
+            'net_profit_margin_%s' % (period_single),
+            'net_profit_margin_%s_trend' % (period_single),
+            'free_cash_flow_%s_trend' % (period_single),
+        ]
+        columns = [c for c in df_period.columns if c in columns_keep]
+        df_period = df_period[columns]
+
+        columns_rename = {
+            'eps': 'eps_%s' % (period_single),
+            'eps_trend': 'eps_%s_trend' % (period_single),
+        }
+        df_period = df_period.rename(columns=columns_rename)
+
+        return df_period
+
+    def __cache_get(self, symbols, update, forced):
+        if len(symbols) == 0:
+            symbols = Tickers().get_symbols()
+        data =  self.db.table_read('analysis', keys=symbols)
+        not_found = sorted(set(symbols).difference(set(data.index)))
+        if len(not_found) > 0:
+            print('update %s symbols' % (len(not_found)))
+            cached = self.__cache_update(not_found, update, forced)
+            if data.shape[0] == 0:
+                data = cached
+            else:
+                data = pd.concat([data, cached])
+            data.sort_index(inplace=True)
+
+        return data
+    
+    def __get_data(self, symbols, update, forced):
+
+        # check if database needs to be cached
+        analysis_timestamps = self.vault.get_db_timestamps('analysis')
+        cache_update = False
+        for db_name, db_timestamps in analysis_timestamps.items():
+            if db_timestamps > self.db.timestamp: cache_update = True
+
+        if cache_update:
+            self.data = self.__cache_update(symbols, update, forced)
+        else:
+            self.data = self.__cache_get(symbols, update, forced)
+
+        return
+        
+        # data = self.db.table_read('analysis', keys=key_values, columns=column_names)
+        # db = Database('analysis')
+        
+        # self.data = self.tickers.get_profiles(update=update, forced=forced)
+        # analysis = self.tickers.get_analysis(update=update, forced=forced)
+
+        # for data_name, data in analysis.items():
+        #     if not data_name.endswith('_db_timestamp'): continue
+        return
+        
+        return
 
         # analysis['info']['data_time'] = pd.to_datetime(analysis['info']['data_time'], unit='s').dt.tz_localize('UTC').dt.tz_convert('US/Pacific')
         # self.data = profile.merge(analysis['info'], how='left', left_index=True, right_index=True)
-
-        # merge last year fundamentals
-        yearly = pd.DataFrame()
-        for symbol, yearly_symbol in analysis['yearly'].items():
-            # free cashflow trends
-            free_cash_flow = None
-            if 'free_cash_flow' in yearly_symbol:
-                free_cash_flow = yearly_symbol['free_cash_flow'].dropna()
-                free_cash_flow = (free_cash_flow / free_cash_flow.iloc[0]).mean()
-
-            # last year entries
-            yearly_symbol = yearly_symbol.tail(1).copy()
-            yearly_symbol.index = [symbol]
-            yearly_symbol.index.name = 'symbol'
-            if free_cash_flow != None: yearly_symbol['free_cash_flow_trend_yearly'] = free_cash_flow
-            yearly = pd.concat([yearly,  yearly_symbol.tail(1)])
-        yearly['debt_v_cash_year'] = yearly['debt_current'] / yearly['cash']
-        yearly['liquidity_year'] = yearly['assets_current'] / yearly['liabilities_current']
-        yearly['net_profit_margin_year'] = yearly['income_net'] / yearly['revenue_total']
-        columns_keep = ['debt_v_cash_year', 'liquidity_year', 'net_profit_margin_year', 'free_cash_flow_trend_yearly']
-        columns = [c for c in yearly.columns if c in columns_keep]
-        yearly = yearly[columns]
-        self.data = self.data.merge(yearly, how='left', left_index=True, right_index=True)
-        
-        # merge last quarter fundamentals
-        quarterly = pd.DataFrame()
-        for symbol, quarterly_symbol in analysis['quarterly'].items():
-            # free cashflow trends
-            free_cash_flow = None
-            if 'free_cash_flow' in quarterly_symbol:
-                free_cash_flow = quarterly_symbol['free_cash_flow'].dropna()
-                free_cash_flow = (free_cash_flow / free_cash_flow.iloc[0]).mean()
-
-            # last quarter entries
-            quarterly_symbol = quarterly_symbol.tail(1).copy()
-            quarterly_symbol.index = [symbol]
-            quarterly_symbol.index.name = 'symbol'
-            if free_cash_flow != None: quarterly_symbol['free_cash_flow_trend_quarterly'] = free_cash_flow
-            quarterly = pd.concat([quarterly,  quarterly_symbol.tail(1)])
-        quarterly['debt_v_cash_quarter'] = quarterly['debt_current'] / quarterly['cash']
-        quarterly['liquidity_quarter'] = quarterly['assets_current'] / quarterly['liabilities_current']
-        quarterly['net_profit_margin_quarter'] = quarterly['income_net'] / quarterly['revenue_total']
-        columns_keep = ['debt_v_cash_quarter', 'liquidity_quarter', 'net_profit_margin_quarter', 'free_cash_flow_trend_quarterly']
-        columns = [c for c in quarterly.columns if c in columns_keep]
-        quarterly = quarterly[columns]
-        self.data = self.data.merge(quarterly, how='left', left_index=True, right_index=True)
-
 
         # # get sector charts
         # sectors = {
@@ -159,6 +203,59 @@ class Analysis():
         #     self.sector_indices = self.sector_indices.join(sector_charts[sector_symbol]['Close'])
         #     self.sector_indices = self.sector_indices.rename(columns={'Close': sector})
         # # pp(self.sector_indices.round(2))
+
+    # @ staticmethod
+    # def __get_param(data, param):
+    #     # recursively go through param keys to find value
+    #     if isinstance(data, dict):
+    #         keys = param.split(':')
+    #         key = keys[0]
+    #         if key in data:
+    #             if len(keys) == 1: return data[key]
+    #             new_param = ':'.join(keys[1:])
+    #             return Analysis.__get_param(data[key], new_param)
+    #     return None
+
+    # def test(self, symbol, date):
+    #     if not symbol in self.symbols: return
+    #     symbol_data = self.symbols[symbol]
+    #     if symbol_data['type'] != 'EQUITY': return
+    #     if symbol_data['sector'] == None: return
+    #     sector = symbol_data['sector']
+    #     # df = self.sector_indices[[sector]].loc[date:]
+    #     df = self.sector_indices[[sector]]
+    #     df_symbol = self.charts[symbol]['Adj Close']
+    #     first_date = df_symbol.index[0]
+    #     df = df.join(self.charts[symbol]['Adj Close'])
+    #     df = df.loc[first_date:].loc[date:]
+    #     df['Adj Close'] = df['Adj Close'].ffill()
+    #     df = df.rename(columns={'Adj Close': symbol})
+    #     # df = (df / df.iloc[0]) - 1.0
+    #     df = (df / df.iloc[0])
+    #     print(df)
+    #     self.viz.plot_dataframe(df-1.0, line=0.0)
+    #     df['compare'] = (df[symbol]/df[sector])-1.0
+    #     df['follow'] = (df[symbol]-1.0)/(df[sector]-1.0)
+    #     df['follow'] = df['follow'].clip(lower=-10, upper=10)
+    #     self.viz.plot_dataframe(df[['compare']], line=0.0)
+    #     self.viz.plot_dataframe(df[['follow']], line=0.0)
+
+    # def get_values(self, param, symbols=[], only_values=False):
+    #     values = {}
+    #     if len(symbols) > 0:
+    #         for symbol in symbols:
+    #             if symbol not in self.symbols: continue
+    #             symbol_data = self.symbols[symbol]
+    #             value = Analysis.__get_param(symbol_data, param)
+    #             values[symbol] = value
+    #     else:
+    #         for symbol, symbol_data in self.symbols.items():
+    #             value = Analysis.__get_param(symbol_data, param)
+    #             values[symbol] = value
+    #     if not only_values:
+    #         return values
+    #     values = [v for s,v in values.items() if v != None]
+    #     return sorted(values)
 
     # def get_params(self):
     #     def fix_key(key):

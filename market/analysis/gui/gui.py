@@ -8,8 +8,7 @@ from pprint import pp
 class Analysis_GUI(tk.Tk):
     def __init__(self, symbols=[]):
         super().__init__()
-        self.tickers = Tickers(symbols)
-        self.analysis = Analysis(self.tickers)
+        self.analysis = Analysis(symbols)
         self.__build_gui()
         self.mainloop()
 
