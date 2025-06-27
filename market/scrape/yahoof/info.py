@@ -422,7 +422,7 @@ class YahooF_Info(YahooF):
                 column_names = [x[0] for x in columns]
                 data = self.db.table_read('info', keys=key_values, columns=column_names)
                 data = data.rename(columns={x[0]: x[1] for x in columns})
-                return data
+                return (data, self.db.timestamp)
             else:
                 data = self.db.table_read('info', keys=key_values)
-                return data
+                return (data, self.db.timestamp)

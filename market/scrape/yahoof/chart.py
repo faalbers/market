@@ -242,10 +242,10 @@ class YahooF_Chart(YahooF):
                 if len(columns_rename) > 0:
                     for symbol in data:
                         data[symbol] = data[symbol].rename(columns=columns_rename)
-                return data
+                return (data, self.db.timestamp)
             else:
                 data = self.get_charts(symbols=key_values)
-                return data
+                return (data, self.db.timestamp)
 
     def get_vault_params(self, data_name):
         if data_name == 'chart':

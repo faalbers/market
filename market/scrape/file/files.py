@@ -65,7 +65,7 @@ class File_Files(File):
                 column_names = [x[0] for x in columns]
                 data = self.db.table_read('ISO10383_MIC', columns=column_names)
                 data = data.rename(columns={x[0]: x[1] for x in columns})
-                return data
+                return (data, self.db.timestamp)
             else:
                 data = self.db.table_read('ISO10383_MIC')
                 return data
@@ -74,10 +74,10 @@ class File_Files(File):
                 column_names = [x[0] for x in columns]
                 data = self.db.table_read('ISO3166_1', columns=column_names)
                 data = data.rename(columns={x[0]: x[1] for x in columns})
-                return data
+                return (data, self.db.timestamp)
             else:
                 data = self.db.table_read('ISO3166_1')
-                return data
+                return (data, self.db.timestamp)
 
     def get_vault_params(self, data_name):
         if data_name == 'mic':

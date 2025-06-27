@@ -104,11 +104,11 @@ class Polygon_News(Polygon):
             #     data = self.db.timeseries_read('news', keys=key_values, columns=column_names)
             #     for symbol in data:
             #         data[symbol] = data[symbol].rename(columns={x[0]: x[1] for x in columns})
-            #     return data
+            #     return (data, self.db.timestamp)
             # else:
             #     # data = self.get_news(symbols=key_values)
             #     data = self.db.timeseries_read('news', keys=key_values)
-            #     return data
+            #     return (data, self.db.timestamp)
 
     def get_vault_params(self, data_name):
         if data_name == 'news_polygon':

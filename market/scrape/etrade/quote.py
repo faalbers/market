@@ -225,11 +225,11 @@ class Etrade_Quote(Etrade):
                 # data = self.db.table_read_df('quote', columns=column_names, key_values=key_values, index_column='symbol')
                 data = self.db.table_read('quote', keys=key_values, columns=column_names)
                 data = data.rename(columns={x[0]: x[1] for x in columns})
-                return data
+                return (data, self.db.timestamp)
             else:
                 # data = self.db.table_read_df('quote', key_values=key_values, index_column='symbol')
                 data = self.db.table_read('quote', keys=key_values)
-                return data
+                return (data, self.db.timestamp)
     
     def get_vault_params(self, data_name):
         if data_name == 'quote':

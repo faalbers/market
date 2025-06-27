@@ -390,10 +390,10 @@ class YahooF_Fundamental(YahooF):
                 columns_rename = {x[0]: x[1] for x in columns if x[1] != None}
                 if len(columns_rename) > 0:
                     data = data.rename(columns=columns_rename)
-                return data
+                return (data, self.db.timestamp)
             else:
                 data = self.db.table_read('trailing', keys=key_values)
-                return data
+                return (data, self.db.timestamp)
         elif data_name == 'yearly':
             if len(columns) > 0:
                 column_names = [x[0] for x in columns]
@@ -402,10 +402,10 @@ class YahooF_Fundamental(YahooF):
                 if len(columns_rename) > 0:
                     for symbol in data:
                         data[symbol] = data[symbol].rename(columns=columns_rename)
-                return data
+                return (data, self.db.timestamp)
             else:
                 data = self.db.timeseries_read('yearly', keys=key_values)
-                return data
+                return (data, self.db.timestamp)
         elif data_name == 'quarterly':
             if len(columns) > 0:
                 column_names = [x[0] for x in columns]
@@ -414,10 +414,10 @@ class YahooF_Fundamental(YahooF):
                 if len(columns_rename) > 0:
                     for symbol in data:
                         data[symbol] = data[symbol].rename(columns=columns_rename)
-                return data
+                return (data, self.db.timestamp)
             else:
                 data = self.db.timeseries_read('quarterly', keys=key_values)
-                return data
+                return (data, self.db.timestamp)
 
     def get_vault_params(self, data_name):
         if data_name == 'fundamental':
