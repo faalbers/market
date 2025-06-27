@@ -1,5 +1,6 @@
 from .catalog import Catalog
 from ..scrape import *
+from ..database import Database
 import logging
 import multiprocessing
 from ..utils import stop_text
@@ -80,8 +81,19 @@ class Vault():
         for scraper_class, scraper_data in catalog.items():
             scraper = scraper_class()
             for data_name, columns in scraper_data.items():
-                data[data_name] = scraper.get_vault_data(data_name, columns, key_values)
+                data[data_name], data[data_name + '_db_timestamp'] = scraper.get_vault_data(data_name, columns, key_values)
         return data
+
+    def get_db_timestamps(self, catalog):
+        if not catalog in self.catalog.catalog: return {}
+
+        catalog = self.catalog.catalog[catalog]
+
+        timestamps = {}
+        for scraper_class, scraper_data in catalog.items():
+            timestamps[scraper_class.dbName] = Database(scraper_class.dbName).timestamp
+
+        return timestamps
 
     def get_params(self, catalog):
         if not catalog in self.catalog.catalog: return {}

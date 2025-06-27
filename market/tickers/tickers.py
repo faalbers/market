@@ -139,6 +139,9 @@ class Tickers():
     def get_symbols(self):
         return self.__symbols.index.to_list()
     
+    def get_symbols_dataframe(self):
+        return self.__symbols.copy()
+    
     def get_symbols_types(self):
         types_all = set()
         if 'type' in self.__symbols.columns:
@@ -183,6 +186,8 @@ class Tickers():
         data = self.vault.get_data('analysis', key_values=self.__symbols.index.to_list(), update=update, forced=forced)
         return data
 
+    def get_analysis_db_timestamps(self):
+        return self.vault.get_db_timestamps('analysis')
     
     # def add_us_market(self, update=False, forced=False):
     #     symbols_data = self.vault.get_data('us_symbols', update=update, forced=forced)
