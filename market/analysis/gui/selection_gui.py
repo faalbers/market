@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from pprint import pp
 import numpy as np
+from .charts_gui import Charts_GUI
 
 class Analysis_Selection_GUI(tk.Toplevel):
     def __init__(self, parent, symbols, columns):
@@ -13,8 +14,32 @@ class Analysis_Selection_GUI(tk.Toplevel):
         self.title('Market Analysis Selection (%s)' % len(symbols))
 
         # add data view
-        frame_data = Frame_Data_Tree(self, self.data, columns)
-        frame_data.pack(padx=10,pady=10, fill=tk.BOTH, expand=True)
+        self.frame_data = Frame_Data_Tree(self, self.data, columns)
+        self.frame_data.pack(padx=10,pady=10, fill=tk.BOTH, expand=True)
+
+        # action buttons frame
+        frame_actions = tk.Frame(self)
+        # frame_actions.pack(anchor='w', padx=10, pady=10)
+        frame_actions.pack(padx=10,pady=10, fill=tk.BOTH, expand=True)
+
+        # add actions
+        action_a = tk.Button(frame_actions, text='Charts', command=self.charts)
+        action_a.grid(row=0, column=0)
+        # action_b = tk.Button(frame_actions, text='Charts Sectors', command=self.charts_sectors)
+        # action_b.grid(row=0, column=1)
+
+    def charts(self):
+        symbols = self.frame_data.get_symbols()
+        if len(symbols) == 0: return
+        Charts_GUI(self, symbols)
+
+    # def charts_sectors(self):
+    #     symbols = self.frame_data.get_symbols()
+    #     if len(symbols) == 0: return
+    #     Charts_Sectors_Compare_GUI(self, symbols)
+
+    def action_b(self):
+        print('Action B')
 
 class Frame_Data_Tree(tk.Frame):
     def __init__(self, parent, data, columns):
@@ -31,6 +56,9 @@ class Frame_Data_Tree(tk.Frame):
 
     def columns_changed(self, columns):
         self.frame_tree.change_columns(columns)
+
+    def get_symbols(self):
+        return self.frame_tree.get_symbols()
 
 class Frame_Tree(tk.Frame):
     def __init__(self, parent, data, columns):
@@ -123,6 +151,13 @@ class Frame_Tree(tk.Frame):
         self.sort_descending = False
         self.tree_refresh()
 
+    def get_symbols(self):
+        symbols = []
+        for selected_item in self.tree.selection():
+            data = self.tree.item(selected_item, 'values')
+            symbols.append(data[0])
+        return symbols
+
 class Frame_Scroll_Columns(ttk.Frame):
     def __init__(self, parent, columns):
         super().__init__(parent)
@@ -154,7 +189,10 @@ class Frame_Columns(tk.Frame):
         self.to_widget = None
 
         self.colums_state = {}
-        for column, state in columns.items():
+        start_columns = ['symbol', 'name', 'type', 'sub_type', 'sector', 'industry']
+        scroll_columns = start_columns + sorted([x for x in columns.keys() if x not in start_columns])
+        for column in scroll_columns:
+            state = columns[column]
             self.colums_state[column] = tk.IntVar()
             if state: self.colums_state[column].set(1)
             check_button = tk.Checkbutton(self, text=column, variable=self.colums_state[column],
