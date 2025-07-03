@@ -232,7 +232,8 @@ class YahooF_Fundamental(YahooF):
                 exec_entity[1].append(self.get_income_stmt_quarterly)
                 exec_entity[1].append(self.get_cash_flow_quarterly)
                 exec_entity[1].append(self.get_balance_sheet_quarterly)
-            exec_list.append(exec_entity)
+            if len(exec_entity[1]) > 0:
+                exec_list.append(exec_entity)
 
         self.multi_execs(exec_list)
 

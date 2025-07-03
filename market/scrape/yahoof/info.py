@@ -276,16 +276,17 @@ class YahooF_Info(YahooF):
             if symbol in updates['regular']:
                 exec_entity[1].append(self.get_info)
                 exec_entity[1].append(self.get_upgrades_downgrades)
-            if symbol in updates['quarterly']:
-                exec_entity[1].append(self.get_earnings_estimate)
-                exec_entity[1].append(self.get_earnings_dates)
-                exec_entity[1].append(self.get_revenue_estimate)
-                exec_entity[1].append(self.get_growth_estimates)
-                exec_entity[1].append(self.get_fund_overview)
-                exec_entity[1].append(self.get_sector_weightings)
-                exec_entity[1].append(self.get_asset_classes)
-                exec_entity[1].append(self.get_top_holdings)
-            exec_list.append(exec_entity)
+                if symbol in updates['quarterly']:
+                    exec_entity[1].append(self.get_earnings_estimate)
+                    exec_entity[1].append(self.get_earnings_dates)
+                    exec_entity[1].append(self.get_revenue_estimate)
+                    exec_entity[1].append(self.get_growth_estimates)
+                    exec_entity[1].append(self.get_fund_overview)
+                    exec_entity[1].append(self.get_sector_weightings)
+                    exec_entity[1].append(self.get_asset_classes)
+                    exec_entity[1].append(self.get_top_holdings)
+            if len(exec_entity[1]) > 1:
+                exec_list.append(exec_entity)
         self.multi_execs(exec_list)
 
 
