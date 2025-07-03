@@ -52,8 +52,21 @@ class Charts_GUI(tk.Toplevel):
         self.end_date.bind("<<DateEntrySelected>>", self.date_changed)
         self.end_date.pack(side='left')
 
+        self.auto_update_date = tk.BooleanVar()
+        self.auto_update_date.set(True)
+        tk.Checkbutton(frame_botton_options, text='auto date', variable=self.auto_update_date).pack(side='left')
+        
+        self.sector_relative = tk.BooleanVar()
+        tk.Checkbutton(frame_botton_options, text='sector relative',
+            variable=self.sector_relative,
+            command=self.sector_relative_changed).pack(side='left')
+        
+        self.end_date.pack(side='left')
         self.refresh_frame_chart()
 
+    def sector_relative_changed(self):
+        self.plot_compare()
+        
     def set_dates(self):
         charts = self.charts[self.symbols].ffill().dropna()
         start_date = charts.index[0]
@@ -77,16 +90,31 @@ class Charts_GUI(tk.Toplevel):
     def plot_compare(self):
         compare = self.get_charts()
         compare = compare / compare.iloc[0]
+        if self.sector_relative.get() and self.sector != 'N/A':
+            compare = compare.merge(self.charts_sectors[self.sector], how='inner', left_index=True, right_index=True)
+            compare[self.sector] = compare[self.sector] / compare[self.sector].iloc[0]
+            compare = compare.sub(compare[self.sector], axis=0)
+            compare = compare.drop(self.sector, axis=1)
+        else:
+            compare = compare - 1.0
 
         fig, ax = plt.subplots()
         if not compare.empty:
             compare.plot(ax=ax)
+            ax.axhline(y=0.0, color='black', linestyle='--', linewidth=1)
+            ax.grid(True, linestyle='--', linewidth=0.5, color='gray')
+            for column in compare.columns:
+                annotate_x = compare[column].index[-1]
+                annotate_y = compare[column].values[-1]
+                ax.annotate(column, xy=(annotate_x, annotate_y), fontsize=8, xytext=(2, 2), textcoords='offset points')
+        plt.tight_layout()
         self.frame_chart.draw_figure(fig)
         plt.close(fig)
 
     def symbols_changed(self, symbols):
         self.symbols = symbols
-        # self.set_dates()
+        if self.auto_update_date.get():
+            self.set_dates()
         self.plot_compare()
 
     def sector_changed(self, sector):
