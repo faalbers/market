@@ -70,10 +70,14 @@ class Tickers():
         # final cleanup
         symbols_data.sort_index(inplace=True)
 
-        # filter types iif needed
+        # filter types if needed
+        # TODO remove old types system
         if len(types) > 0:
             symbols_data = self.__get_symbols_info(symbols_data, types)
         
+        # reorder columns
+        symbols_data = symbols_data[['name', 'type', 'sub_type']]
+
         return symbols_data
 
     def __get_symbols_info(self, symbols, types=[]):
