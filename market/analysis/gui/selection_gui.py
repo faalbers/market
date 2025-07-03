@@ -163,93 +163,52 @@ class Frame_Scroll_Columns(ttk.Frame):
         super().__init__(parent)
         self.parent = parent
 
-        scrollbar = ttk.Scrollbar(self, orient='vertical')
-        scrollbar.pack(side='right', fill='y', expand=False)
-        canvas = tk.Canvas(self,
-            bd=0,
-            highlightthickness=0,
-            width=220,
-            yscrollcommand=scrollbar.set
-        )
-        canvas.pack(side='left', fill='both', expand=True)
-        scrollbar.config(command=canvas.yview)
+        self.canvas = tk.Canvas(self)
+        self.canvas.pack(side='left', fill='both')
 
-        interior = Frame_Columns(self, columns)
-        interior.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
-        interior_id = canvas.create_window(0, 0, window=interior, anchor='nw')
+        self.frame_checkboxes = tk.Frame(self)
+        self.canvas.create_window((0,0), window=self.frame_checkboxes, anchor='nw')
 
-    def columns_changed(self, columns):
-        self.parent.columns_changed(columns)
-
-class Frame_Columns(tk.Frame):
-    def __init__(self, parent, columns):
-        super().__init__(parent)
-        self.parent = parent
-        self.from_widget = None
-        self.to_widget = None
-
-        self.colums_state = {}
-        start_columns = ['symbol', 'name', 'type', 'sub_type', 'sector', 'industry']
-        scroll_columns = start_columns + sorted([x for x in columns.keys() if x not in start_columns])
-        for column in scroll_columns:
-            state = columns[column]
-            self.colums_state[column] = tk.IntVar()
-            if state: self.colums_state[column].set(1)
-            check_button = tk.Checkbutton(self, text=column, variable=self.colums_state[column],
-                font=("Helvetica", 8), command=self.check_changed)
-            # check_button.focus_force()
-            new_row = self.grid_size()[1]
-            check_button.grid(row=new_row, column=0, sticky=tk.W)
-            check_button.bind('<ButtonPress-1>', self.check_pressed)
-            check_button.bind('<B1-Motion>', self.check_motion)
+        widest_check = 0
+        height_check = 0
+        self.columns_state = {}
+        for column in columns:
+            self.columns_state[column] = tk.IntVar()
+            self.columns_state[column].set(1)
+            check_button = tk.Checkbutton(self.frame_checkboxes, text=column,
+                variable=self.columns_state[column], command=self.check_changed)
+            check_button.bind('<MouseWheel>', self.mouse_scroll)
             check_button.bind('<ButtonRelease-1>', self.check_released)
-            # check_button.bind('<Control-a>', self.check_all)
-        self.dummy = tk.Frame(self)
-        self.dummy.grid(row=new_row+1, column=0)
+            check_button.pack(anchor='w')
+            if check_button.winfo_reqwidth() > widest_check: widest_check = check_button.winfo_reqwidth()
+            height_check += check_button.winfo_reqheight()
+        self.canvas.config(width=widest_check)
+        self.canvas.config(scrollregion=(0,0,widest_check, height_check))
 
-    def check_pressed(self, event):
-        self.from_widget = event.widget
-        self.to_widget = event.widget
-        self.from_widget.focus_set()
+        scrollbar = ttk.Scrollbar(self, orient = 'vertical', command=self.scroll_update)
+        self.canvas.config(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right', fill='y')
 
-    def check_motion(self, event):
-        x = event.x_root - self.winfo_rootx()
-        y = event.y_root - self.winfo_rooty()
-        self.to_column, self.to_row = self.grid_location(x, y)
-        for widget in self.winfo_children():
-            info = widget.grid_info()
-            if info["row"] == self.to_row and info["column"] == self.to_column:
-                if widget != self.to_widget:
-                    self.to_widget = widget
-                    self.from_widget.config(bg='yellow')
-                    self.to_widget.focus_set()
-                return
+    def scroll_update(self, *params):
+        if self.canvas.winfo_height() <= self.frame_checkboxes.winfo_height():
+            self.canvas.yview(*params)
+    
+    def mouse_scroll(self, event):
+        if self.canvas.winfo_height() <= self.frame_checkboxes.winfo_height():
+            self.canvas.yview_scroll(int(-1*(event.delta/120)), 'units')
 
     def check_released(self, event):
-        self.from_widget.config(bg='SystemButtonFace')
-        self.dummy.focus_set()
-        if self.from_widget != self.to_widget:
-            from_row = self.from_widget.grid_info()['row']
-            to_row = self.to_widget.grid_info()['row']
-            self.from_widget.grid_forget()
-            self.to_widget.grid_forget()
-            self.from_widget.grid(row=to_row, column=0, sticky=tk.W)
-            self.to_widget.grid(row=from_row, column=0, sticky=tk.W)
-            self.check_changed()
-        elif event.state & 0x0001:
+        if event.state & 0x0001:
             # With shift , change state of them
-            current_column = self.from_widget.cget('text')
-            current_column_state_inverse = abs((self.colums_state[current_column].get())-1)
-            for column, column_state in self.colums_state.items():
+            current_column = event.widget.cget('text')
+            state_inverse = abs((self.columns_state[current_column].get())-1)
+            for column, column_state in self.columns_state.items():
                 if column == current_column: continue
-                column_state.set(current_column_state_inverse)
+                column_state.set(state_inverse)
     
     def check_changed(self):
-        columns = {}
-        for widget in self.winfo_children():
-            if not isinstance(widget, tk.Checkbutton): continue
-            column = widget.cget('text')
-            if self.colums_state[column].get() == 0: continue
-            columns[widget.grid_info()['row']] = widget.cget('text')
-        columns = [columns[x] for x in sorted(columns)]
-        self.parent.columns_changed(columns)
+        self.parent.columns_changed(self.get_columns())
+    
+    def get_columns(self):
+        return [column for column, column_state in self.columns_state.items() if column_state.get() == 1]
+
