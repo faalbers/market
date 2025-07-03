@@ -128,12 +128,14 @@ class Catalog():
         'analysis': {
             YahooF_Info: {
                 'info': [
-                    ['fullExchangeName', 'exchange_name'],
                     ['sectorDisp', 'sector'],
                     ['industryDisp', 'industry'],
+                    
                     ['trailingPE', 'pe_ttm'],
                     ['trailingEps', 'eps_ttm'],
                     ['priceToSalesTrailing12Months', 'ps_ttm'],
+
+                    # ['fullExchangeName', 'exchange_name'],
                     # ['timestamp', 'data_time'],
                     # ['epsCurrentYear', 'eps_current_year'],
                     # ['epsTrailingTwelveMonths', 'eps_ttm'],
