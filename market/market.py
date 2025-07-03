@@ -75,8 +75,8 @@ class Market():
     def get_params(self, catalog):
         return self.vault.get_params(catalog)
 
-    def get_analysis(self, tickers, update=False, forced=False):
-        return Analysis(tickers, update=update, forced=forced)
+    def get_analysis(self, symbols=[], update=False, forced=False, cache_update=False):
+        return Analysis(symbols, update=update, forced=forced, cache_update=cache_update)
     
     def analysis_gui(self, symbols=[]):
         return Analysis_GUI(symbols)
