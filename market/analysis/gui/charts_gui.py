@@ -20,6 +20,7 @@ class Charts_GUI(tk.Toplevel):
         # print(self.sector_symbols)
 
         self.title('Charts Compare')
+        self.geometry("1200x800")
 
         frame_top_options = tk.Frame(self)
         frame_top_options.pack(fill='x')
@@ -27,8 +28,8 @@ class Charts_GUI(tk.Toplevel):
         self.frame_chart_holder = Frame_Chart_holder(self)
         self.frame_chart_holder.pack(expand=True, fill='both')
         
-        frame_botton_options = tk.Frame(self)
-        frame_botton_options.pack(side='bottom', fill='x')
+        frame_bottom_options = tk.Frame(self)
+        frame_bottom_options.pack(side='bottom', fill='x')
         
         tk.Label(frame_top_options, text='Sector:').pack(side='left')
         sectors = ['N/A'] + sorted(self.charts_sectors.columns)
@@ -40,24 +41,24 @@ class Charts_GUI(tk.Toplevel):
         self.frame_chart = None
 
         # start_date_chart, end_date_chart = self.get_chart_dates()
-        tk.Label(frame_botton_options, text='Start Date:').pack(side='left')
-        self.start_date = DateEntry(frame_botton_options,
+        tk.Label(frame_bottom_options, text='Start Date:').pack(side='left')
+        self.start_date = DateEntry(frame_bottom_options,
             selectmode='day', date_pattern="yyyy-mm-dd")
         self.start_date.bind("<<DateEntrySelected>>", self.date_changed)
         self.start_date.pack(side='left')
         
-        tk.Label(frame_botton_options, text='End Date:').pack(side='left')
-        self.end_date = DateEntry(frame_botton_options,
+        tk.Label(frame_bottom_options, text='End Date:').pack(side='left')
+        self.end_date = DateEntry(frame_bottom_options,
             selectmode='day', date_pattern="yyyy-mm-dd")
         self.end_date.bind("<<DateEntrySelected>>", self.date_changed)
         self.end_date.pack(side='left')
 
         self.auto_update_date = tk.BooleanVar()
         self.auto_update_date.set(True)
-        tk.Checkbutton(frame_botton_options, text='auto date', variable=self.auto_update_date).pack(side='left')
+        tk.Checkbutton(frame_bottom_options, text='auto date', variable=self.auto_update_date).pack(side='left')
         
         self.sector_relative = tk.BooleanVar()
-        tk.Checkbutton(frame_botton_options, text='sector relative',
+        tk.Checkbutton(frame_bottom_options, text='sector relative',
             variable=self.sector_relative,
             command=self.sector_relative_changed).pack(side='left')
         
@@ -79,7 +80,8 @@ class Charts_GUI(tk.Toplevel):
             self.frame_chart.destroy()
         self.frame_chart = Frame_Chart(self.frame_chart_holder, self.symbols, self.sector)
         self.frame_chart.pack(expand=True, fill='both')
-        self.set_dates()
+        if self.auto_update_date.get():
+            self.set_dates()
         self.plot_compare()
 
     def get_charts(self):
@@ -141,7 +143,7 @@ class Charts_GUI(tk.Toplevel):
 
     def set_charts_sectors(self, symbols):
         # get sector charts
-        sectors_found = self.analysis.data.loc[symbols, 'sector'].dropna().unique()
+        sectors_found = self.analysis.loc[symbols, 'sector'].dropna().unique()
         sectors = {
             'XLV': 'Healthcare',
             'XLB': 'Basic Materials',
@@ -168,7 +170,7 @@ class Charts_GUI(tk.Toplevel):
             self.charts_sectors = self.charts_sectors.merge(sector_charts[sector_symbol]['Adj Close'], how='outer', left_index=True, right_index=True)
             self.charts_sectors = self.charts_sectors.rename(columns={'Adj Close': sector})
         
-        for symbol, sector in self.analysis.data.loc[symbols]['sector'].dropna().items():
+        for symbol, sector in self.analysis.loc[symbols]['sector'].dropna().items():
             self.sector_symbols[sector].append(symbol)
         self.sector_symbols['N/A'] = symbols
 
