@@ -135,6 +135,14 @@ class Catalog():
                     ['trailingEps', 'eps_ttm'],
                     ['priceToSalesTrailing12Months', 'ps_ttm'],
 
+                    # ['dividendRate', 'dividend_rate_forward_$'],
+                    # ['trailingAnnualDividendRate', 'dividend_rate_ttm_$'],
+
+                    # ['dividendYield', 'dividend_yield_forward_%'],
+                    # ['fiveYearAvgDividendYield', 'dividend_yield_5y_average_%'],
+                    # ['trailingAnnualDividendYield', 'dividend_yield_ttm_%'],
+                    
+
                     # ['fullExchangeName', 'exchange_name'],
                     # ['timestamp', 'data_time'],
                     # ['epsCurrentYear', 'eps_current_year'],
@@ -220,14 +228,15 @@ class Catalog():
             #         ['etradeEarlyRedemptionFee', 'early_redemption_fee_etrade'],
             #     ],
             # },
-            # YahooF_Chart: {
-            #     'chart': [
-            #         ['Close', 'close'],
-            #         ['Adj Close', 'adjusted_close'],
-            #         ['Dividends', 'dividends'],
-            #         ['Capital Gains', 'capital_gains'],
-            #         ['Stock Splits', 'splits'],
-            #     ],
-            # },
+            YahooF_Chart: {
+                'chart': [
+                    ['Adj Close', 'price'],
+                    ['Volume', 'volume'],
+                    ['Dividends', 'dividends'],
+                    # ['Stock Splits', 'stock_splits'],
+                    # ['Capital Gains', 'capital_gains'],
+                    # ['Stock Splits', 'splits'],
+                ],
+            },
         },
     }

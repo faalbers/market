@@ -3,13 +3,14 @@ from tkinter import ttk
 from pprint import pp
 import numpy as np
 from .charts_gui import Charts_GUI
+from .dividends_gui import Dividends_GUI
 
 class Analysis_Selection_GUI(tk.Toplevel):
     def __init__(self, parent, symbols, columns):
         super().__init__(parent)
         self.analysis = parent.analysis
         self.symbols = symbols
-        self.data = self.analysis.data.loc[self.symbols].reset_index() # this also creates a copy
+        self.data = self.analysis.loc[self.symbols].reset_index() # this also creates a copy
 
         self.title('Market Analysis Selection (%s)' % len(symbols))
 
@@ -23,15 +24,20 @@ class Analysis_Selection_GUI(tk.Toplevel):
         frame_actions.pack(padx=10,pady=10, fill=tk.BOTH, expand=True)
 
         # add actions
-        action_a = tk.Button(frame_actions, text='Charts', command=self.charts)
-        action_a.grid(row=0, column=0)
-        # action_b = tk.Button(frame_actions, text='Charts Sectors', command=self.charts_sectors)
-        # action_b.grid(row=0, column=1)
+        action_charts = tk.Button(frame_actions, text='Charts', command=self.charts)
+        action_charts.grid(row=0, column=0)
+        action_charts = tk.Button(frame_actions, text='Dividends', command=self.dividends)
+        action_charts.grid(row=0, column=1)
 
     def charts(self):
         symbols = self.frame_data.get_symbols()
         if len(symbols) == 0: return
         Charts_GUI(self, symbols)
+
+    def dividends(self):
+        symbols = self.frame_data.get_symbols()
+        if len(symbols) == 0: return
+        Dividends_GUI(self, symbols)
 
     # def charts_sectors(self):
     #     symbols = self.frame_data.get_symbols()
@@ -174,7 +180,7 @@ class Frame_Scroll_Columns(ttk.Frame):
         self.columns_state = {}
         for column in columns:
             self.columns_state[column] = tk.IntVar()
-            self.columns_state[column].set(1)
+            if columns[column]: self.columns_state[column].set(1)
             check_button = tk.Checkbutton(self.frame_checkboxes, text=column,
                 variable=self.columns_state[column], command=self.check_changed)
             check_button.bind('<MouseWheel>', self.mouse_scroll)

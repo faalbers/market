@@ -17,22 +17,34 @@ class Analysis():
         # self.viz = Viz()
         # self.benchmarks = Tickers(['SPY', 'QQQ'])
 
+    def get_data(self, active_only=True):
+        if active_only:
+            return self.data[self.data['active'] == True].copy()
+        else:
+            return self.data.copy()
+    
     def __cache_update(self, symbols, update, forced):
-        tickers = Tickers(symbols)
-        data = tickers.get_symbols_dataframe()
-        if data.empty: return data
-
         print('update cache %s symbols' % (len(symbols)))
+        tickers = Tickers(symbols)
+        if tickers.empty: return data
+
+        # start data
+        data = tickers.get_symbols_dataframe()
 
         # get analysis
         analysis = tickers.get_analysis(update=update, forced=forced)
+        analysis['type'] = data['type']
 
         # merge info
         data = data.merge(analysis['info'], how='left', left_index=True, right_index=True)
         
-        # fix 'infinity'
+        # fix 'infinity' from info
         for column in data.columns[data.apply(lambda x: 'Infinity' in x.values)]:
             data.loc[data[column] == 'Infinity', column] = np.nan
+
+        # get charts data and valid anaylsis
+        chart_data = self.__get_chart_data(analysis)
+        data = data.merge(chart_data, how='left', left_index=True, right_index=True)
 
         # get ttm fundamentals
         trailing = analysis['trailing'].copy()
@@ -63,8 +75,8 @@ class Analysis():
         data = data.merge(yearly, how='left', left_index=True, right_index=True)
         data = data.merge(quarterly, how='left', left_index=True, right_index=True)
 
-        # sort fundamentals columns
-        columns_main = ['name', 'type', 'sub_type', 'sector', 'industry']
+        # sort columns
+        columns_main = [c for c in ['name', 'type', 'sub_type', 'sector', 'industry'] if c in data.columns]
         columns = columns_main + sorted([x for x in data.columns if x not in columns_main])
         data = data[columns]
 
@@ -75,10 +87,80 @@ class Analysis():
         self.db.backup()
         self.db.table_write('analysis', data)
 
-        return data
+        return data        
+
+    def __get_chart_data(self, analysis):
+        print('charts:')
+        chart_data = pd.DataFrame()
+
+        now = pd.Timestamp.now()
+        # two_months_ago = pd.Timestamp.now() - pd.DateOffset(months=2)
+        # one_year_ago = pd.Timestamp.now() - pd.DateOffset(years=1)
+        for symbol, chart in analysis['chart'].items():
+            # find of stock is still active
+            chart_volume = chart[chart['volume'] > 0]
+            chart_data.loc[symbol, 'active'] = False
+            symbol_type = analysis['type'].loc[symbol]
+            if symbol_type == 'EQUITY':
+                if chart_volume.empty: continue
+                inactive_days = (now - (chart_volume.index[-1])).days
+                if inactive_days > 30: continue
+            chart_data.loc[symbol, 'active'] = True
+            
+            # get dividends data
+            if not 'dividends' in chart.columns: continue
+            
+            # there are some price values that are strings because of Infinity
+            chart['price'] = chart['price'].astype(float, errors='ignore')
+            chart_dividends = chart[chart['dividends'] > 0]
+            if chart_dividends.empty: continue
+
+            # yearly dividends data
+            first_year = chart_dividends.index[0].year + 1
+            last_year = datetime.now().year-1
+            chart_dividends_yearly = chart_dividends[(chart_dividends.index.year >= first_year) & (chart_dividends.index.year <= last_year)]
+            dividends = chart_dividends_yearly['dividends'].groupby(chart_dividends_yearly.index.year)
+            price = chart_dividends_yearly['price'].groupby(chart_dividends_yearly.index.year)
+            dividend_count_yearly = dividends.size()
+            dividend_rate_yearly = dividends.sum()
+            dividend_price_yearly = price.mean()
+            years_count = dividend_count_yearly.shape[0]
+            chart_data.loc[symbol, 'dividend_years'] = years_count
+
+            # get trends and stds
+            if years_count > 1:
+                slope, start = np.polyfit(range(years_count), dividend_rate_yearly.values, 1)
+                trend = range(years_count)*slope + start
+                trend_mean = np.mean(trend)
+                dividend_rate_yearly_trend_percent = ((trend[-1] - trend[0]) / trend_mean) * 100
+                chart_data.loc[symbol, 'dividend_rate_yearly_trend_%'] = dividend_rate_yearly_trend_percent
+                dividend_rate_yearly_flat = dividend_rate_yearly - trend + trend_mean
+                dividend_rate_yearly_std_percent = (dividend_rate_yearly_flat.std() / dividend_rate_yearly_flat.mean()) * 100
+                chart_data.loc[symbol, 'dividend_rate_yearly_std_%'] = dividend_rate_yearly_std_percent
+
+            # get last year data
+            if last_year in dividend_rate_yearly.index:
+                dividend_rate_last_year = dividend_rate_yearly.loc[last_year]
+                # chart_data.loc[symbol, 'dividend_rate_last_year_$'] = dividend_rate_last_year
+                dividend_yield_last_year_percent = (dividend_rate_last_year / dividend_price_yearly.loc[last_year]) * 100
+                chart_data.loc[symbol, 'dividend_yield_last_year_%'] = dividend_yield_last_year_percent
+            
+            # get ttm data
+            dividends_ttm = chart_dividends.loc[chart_dividends.index > (datetime.now() - pd.DateOffset(months=12))]['dividends']
+            if not dividends_ttm.empty:
+                dividend_count_ttm = dividends_ttm.shape[0]
+                dividend_rate_ttm = dividends_ttm.sum()
+                # chart_data.loc[symbol, 'dividends_rate_ttm_$'] = dividend_rate_ttm
+                dividends_yield_ttm_percent = (dividend_rate_ttm / chart['price'].iloc[-1]) * 100
+                chart_data.loc[symbol, 'dividends_yield_ttm_%'] = dividends_yield_ttm_percent
+                if last_year in dividend_rate_yearly.index:
+                    dividends_rate_ttm_trend_percent = ((dividend_rate_ttm / dividend_rate_last_year) * 100) - 100
+                    chart_data.loc[symbol, 'dividends_rate_ttm_trend_%'] = dividends_rate_ttm_trend_percent
+            
+        return chart_data
 
     def __get_fundamentals(self, analysis, period):
-        print(period)
+        print('fundamentals: %s' % period)
         period_single = period.rstrip('ly')
         df_period = pd.DataFrame()
         do_save = True
@@ -162,6 +244,7 @@ class Analysis():
     
     def __get_data(self, symbols, update, forced, cache_update=False):
         # check if database needs to be cached
+        if update: cache_update = True
         analysis_timestamps = self.vault.get_db_timestamps('analysis')
         for db_name, db_timestamps in analysis_timestamps.items():
             if db_timestamps > self.db.timestamp: cache_update = True
