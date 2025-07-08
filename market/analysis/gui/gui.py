@@ -1,24 +1,31 @@
 import tkinter as tk
+from tkinter import filedialog, messagebox
 from ...tickers import Tickers
 from ...analysis import Analysis
 from .selection_gui import Analysis_Selection_GUI
 import pandas as pd
 from pprint import pp
+import pickle
 
 class Analysis_GUI(tk.Tk):
-    def __init__(self, symbols=[]):
+    def __init__(self, symbols=[], update=False, forced=False, cache_update=False):
         super().__init__()
-        self.analysis = Analysis(symbols)
+        self.analysis = Analysis(symbols, update=update, forced=forced, cache_update=cache_update).get_data()
+
+        if self.analysis.empty:
+            print('No data available to analyse')
+            return
         self.__build_gui()
         self.mainloop()
 
     def __build_gui(self):
         # self.geometry('550x100')
         self.title('Market Analysis')
+        self.geometry("600x200")
 
         # action buttons frame
         frame_actions = tk.Frame(self)
-        frame_actions.pack(anchor='w', padx=10, pady=10)
+        frame_actions.pack(anchor='w', fill='x', padx=10, pady=10)
 
         # filters frame
         self.frame_filters = Frame_Filters(self)
@@ -26,11 +33,22 @@ class Analysis_GUI(tk.Tk):
 
         # add actions
         self.button_add_filter = tk.Button(frame_actions, text='Add Filter', command=self.frame_filters.add_frame_filter)
-        self.button_add_filter.grid(row=0, column=0)
+        self.button_add_filter.pack(side='left')
+        self.button_save_filters = tk.Button(frame_actions, text='Save Filters', command=self.save_filters)
+        self.button_save_filters.pack(side='left')
+        self.button_load_filters = tk.Button(frame_actions, text='Load Filters', command=self.load_filters)
+        self.button_load_filters.pack(side='left')
+        tk.Frame(frame_actions).pack(side='left', expand=True)
+        
         analyse = tk.Button(frame_actions, text='Analyse', command=self.analyze)
-        analyse.grid(row=0, column=1)
-        frame_empty = tk.Frame(frame_actions, width=400)
-        frame_empty.grid(row=0, column=2)
+        analyse.pack(side='right')
+        
+        # self.button_add_filter = tk.Button(frame_actions, text='Add Filter', command=self.frame_filters.add_frame_filter)
+        # self.button_add_filter.grid(row=0, column=0)
+        # analyse = tk.Button(frame_actions, text='Analyse', command=self.analyze)
+        # analyse.grid(row=0, column=1)
+        # frame_empty = tk.Frame(frame_actions, width=400)
+        # frame_empty.grid(row=0, column=2)
 
     def reset_frame_filters(self):
         self.frame_filters.destroy()
@@ -38,13 +56,31 @@ class Analysis_GUI(tk.Tk):
         self.button_add_filter.config(command=self.frame_filters.add_frame_filter)
         self.frame_filters.pack(anchor='w', padx=10, pady=10)
 
+    def save_filters(self):
+        filters = self.frame_filters.get_filters()
+        if len(filters) == 0:
+            messagebox.showinfo('Save Filters', 'No filters to save')
+        else:
+            file = filedialog.asksaveasfile(filetypes=[('FILTER', '*.filt')], defaultextension='.filt', mode='wb')
+            if file != None:
+                pickle.dump(filters, file, protocol=pickle.HIGHEST_PROTOCOL)
+                file.close()
+    
+    def load_filters(self):
+        file = filedialog.askopenfile(filetypes=[('FILTER', '*.filt')], defaultextension='.filt', mode='rb')
+        if file != None:
+            filters = pickle.load(file)
+            file.close()
+            self.reset_frame_filters()
+            self.frame_filters.set_filters(filters)
+
     def get_filtered(self):
         filters = self.frame_filters.get_filters()
-        select = pd.Series(True, index=self.analysis.data.index)
+        select = pd.Series(True, index=self.analysis.index)
         columns = set()
         for filter in filters:
             or_filters = [filter['and']] + filter['or']
-            or_select = pd.Series(False, index=self.analysis.data.index)
+            or_select = pd.Series(False, index=self.analysis.index)
             for or_filter in or_filters:
                 column = or_filter[0]
                 columns.add(column)
@@ -55,10 +91,10 @@ class Analysis_GUI(tk.Tk):
                 elif value.replace('.', '').isnumeric():
                     value = float(value)
                 
-                if column == self.analysis.data.index.name:
-                    test_series = self.analysis.data.index
+                if column == self.analysis.index.name:
+                    test_series = self.analysis.index
                 else:
-                    test_series = self.analysis.data[column]
+                    test_series = self.analysis[column]
                 
                 if function == '==':
                     or_select = or_select | (test_series == value)
@@ -89,15 +125,15 @@ class Analysis_GUI(tk.Tk):
                     
             select = select & or_select
 
-        return (self.analysis.data[select].index, columns)
+        return (self.analysis[select].index, columns)
     
     def analyze(self):
         symbols, columns = self.get_filtered()
         if len(columns) == 0:
-            columns = ['symbol'] + self.analysis.data.columns.tolist()
+            columns = ['symbol'] + self.analysis.columns.tolist()
         else:
             columns.discard('symbol')
-            columns = ['symbol'] + list(columns)
+            columns = ['symbol'] + [c for c in self.analysis.columns if c in columns]
         Analysis_Selection_GUI(self, symbols, columns)
 
 class Frame_Filters(tk.Frame):
@@ -107,9 +143,9 @@ class Frame_Filters(tk.Frame):
         self.analysis = parent.analysis
         self.parent = parent
 
-    def add_frame_filter(self):
+    def add_frame_filter(self, filter={'and': (), 'or': []}):
         # add filter to filters
-        frame_filter = Frame_Filter(self)
+        frame_filter = Frame_Filter(self, filter)
         new_row = self.grid_size()[1]
         frame_filter.grid(row=new_row, column=0, sticky=tk.W)
 
@@ -126,9 +162,13 @@ class Frame_Filters(tk.Frame):
         for frame_filter in self.winfo_children():
             filters.append(frame_filter.get_filter())
         return filters
+    
+    def set_filters(self, filters):
+        for filter in filters:
+            self.add_frame_filter(filter)
 
 class Frame_Filter(tk.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, filter={'and': (), 'or': []}):
         super().__init__(parent)
         self.analysis = parent.analysis
         self.parent = parent
@@ -137,11 +177,11 @@ class Frame_Filter(tk.Frame):
         self.grid_columnconfigure(0, minsize=530)
 
         # as filter AND to filter
-        self.filter = Filter(self)
+        self.filter = Filter(self, filter['and'])
         self.filter.grid(row=0, column=0, sticky=tk.W)
 
         # add OR filters frame to filter
-        self.frame_filter_or = Frame_Filter_OR(self)
+        self.frame_filter_or = Frame_Filter_OR(self, filter['or'])
         self.frame_filter_or.grid(row=1, column=0, sticky=tk.E)
 
     def add_filter(self):
@@ -162,13 +202,15 @@ class Frame_Filter(tk.Frame):
         return filter
 
 class Frame_Filter_OR(tk.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, filters=[]):
         super().__init__(parent)
         self.analysis = parent.analysis
         self.parent = parent
+        for filter in filters:
+            self.add_filter(filter)
     
-    def add_filter(self):
-        filter = Filter(self)
+    def add_filter(self, filter=()):
+        filter = Filter(self, filter)
         new_row = self.grid_size()[1]
         filter.grid(row=new_row, column=0, sticky=tk.E)
     
@@ -187,7 +229,7 @@ class Frame_Filter_OR(tk.Frame):
         return filters
 
 class Filter(tk.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, filter=()):
         super().__init__(parent)
         self.analysis = parent.analysis
 
@@ -200,12 +242,15 @@ class Filter(tk.Frame):
         add.grid(row=0, column=1)
 
         # add param option menu
-        params = [self.analysis.data.index.name] + ['type','sub_type'] + sorted(set(self.analysis.data.columns).difference(['type','sub_type']))
-        # params = ['type','sub_type'] + sorted(set(self.analysis.data.columns).difference(['type','sub_type']))
+        params = [self.analysis.index.name] + ['type','sub_type'] + sorted(set(self.analysis.columns).difference(['type','sub_type']))
+        # params = ['type','sub_type'] + sorted(set(self.analysis.columns).difference(['type','sub_type']))
         self.param_select = tk.StringVar()
-        self.param_select.set(params[0])
+        if len(filter) > 0:
+            self.param_select.set(filter[0])
+        else:
+            self.param_select.set(params[0])
         param = tk.OptionMenu(self, self.param_select, *params, command=self.param_changed)
-        param.config(width=20)
+        param.config(width=25)
         param.grid(row=0, column=2)
 
         # add function option menu
@@ -221,17 +266,23 @@ class Filter(tk.Frame):
             'endswith',
         ]
         self.function_select = tk.StringVar()
-        self.function_select.set(functions[0])
+        if len(filter) > 0:
+            self.function_select.set(filter[1])
+        else:
+            self.function_select.set(functions[0])
         function = tk.OptionMenu(self, self.function_select, *functions, command=self.function_changed)
         function.config(width=7)
         function.grid(row=0, column=3)
 
         # add value option menu
         self.value_select = tk.StringVar()
-        self.value = None
-        # self.value = tk.Entry(self, width=37)
-        # self.value.grid(row=0, column=5)
-        self.param_changed(self.param_select.get())
+        if len(filter) > 0:
+            self.value = tk.Entry(self, width=37)
+            self.value.insert(tk.END, filter[2])
+            self.value.grid(row=0, column=5)
+        else:
+            self.value = None
+            self.param_changed(self.param_select.get())
 
 
     def param_changed(self, param):
@@ -239,10 +290,10 @@ class Filter(tk.Frame):
             self.value.destroy()
             self.value = None
         function = self.function_select.get()
-        if param == self.analysis.data.index.name:
-            values = sorted(self.analysis.data.index)
+        if param == self.analysis.index.name:
+            values = sorted(self.analysis.index)
         else:
-            values = sorted(self.analysis.data[param].dropna().unique())
+            values = sorted(self.analysis[param].dropna().unique())
         # if len(values) == 0:
         #     for i, widget in enumerate(self.winfo_children()):
         #         widget.grid_configure(column=i)
