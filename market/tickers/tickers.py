@@ -10,6 +10,7 @@ class Tickers():
         self.logger = logging.getLogger('Market')
         self.vault = Vault()
         self.__symbols = self.__make_symbols(symbols, types)
+        self.empty = self.__symbols.empty
 
     def __make_symbols(self, symbols=[], types=[] ,update=False, forced=False):
         symbols_data_vault = self.vault.get_data('symbols', key_values=symbols, update=update, forced=forced)
@@ -76,7 +77,8 @@ class Tickers():
             symbols_data = self.__get_symbols_info(symbols_data, types)
         
         # reorder columns
-        symbols_data = symbols_data[['name', 'type', 'sub_type']]
+        columns = [c for c in ['name', 'type', 'sub_type'] if c in symbols_data.columns]
+        symbols_data = symbols_data[columns]
 
         return symbols_data
 
