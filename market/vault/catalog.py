@@ -67,15 +67,18 @@ class Catalog():
             },
         },
         'news': {
-            # Finviz_Ticker_News: {
-            #     'news_finviz': [
-            #         ['Title', 'title'],
-            #         ['sentiment_llama', 'sentiment'],
-            #     ],
-            # },
+            Finviz_Ticker_News: {
+                'news_finviz': [
+                    ['Title', 'title'],
+                    ['Link', 'url'],
+                    # ['sentiment_llama', 'sentiment'],
+                ],
+            },
             Polygon_News: {
                 'news_polygon': [
                     ['title', 'title'],
+                    ['article_url', 'url'],
+                    # ['description', 'description'],
                     # ['sentiment_llama', 'sentiment'],
                 ],
             },
@@ -123,6 +126,7 @@ class Catalog():
         'info': {
             YahooF_Info: {
                 'info': [],
+                'upgrades_downgrades': [],
             },
         },
         'analysis': {
@@ -134,6 +138,9 @@ class Catalog():
                     ['trailingPE', 'pe_ttm'],
                     ['trailingEps', 'eps_ttm'],
                     ['priceToSalesTrailing12Months', 'ps_ttm'],
+
+                    ['fundOverview', 'fund_overview'],
+                    ['growthEstimates', 'growth_estimates'],
 
                     # ['dividendRate', 'dividend_rate_forward_$'],
                     # ['trailingAnnualDividendRate', 'dividend_rate_ttm_$'],

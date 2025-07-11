@@ -4,6 +4,8 @@ from pprint import pp
 import numpy as np
 from .charts_gui import Charts_GUI
 from .dividends_gui import Dividends_GUI
+from .news_gui import News_GUI
+import webbrowser
 
 class Analysis_Selection_GUI(tk.Toplevel):
     def __init__(self, parent, symbols, columns):
@@ -24,10 +26,28 @@ class Analysis_Selection_GUI(tk.Toplevel):
         frame_actions.pack(padx=10,pady=10, fill=tk.BOTH, expand=True)
 
         # add actions
-        action_charts = tk.Button(frame_actions, text='Charts', command=self.charts)
-        action_charts.grid(row=0, column=0)
-        action_charts = tk.Button(frame_actions, text='Dividends', command=self.dividends)
-        action_charts.grid(row=0, column=1)
+        tk.Button(frame_actions, text='Charts', command=self.charts).pack(side='left')
+        tk.Button(frame_actions, text='Dividends', command=self.dividends).pack(side='left')
+        tk.Button(frame_actions, text='News', command=self.news).pack(side='left')
+        tk.Button(frame_actions, text='Go', command=self.go_site).pack(side='right')
+        http_links = [
+            'Yahoo Finance',
+            # 'Etrade',
+            'Finviz',
+        ]
+        self.http_link = tk.StringVar()
+        self.http_link.set(http_links[0])
+        tk.OptionMenu(frame_actions, self.http_link, *http_links).pack(side='right')
+        # https://finance.yahoo.com/quote/AAPL/chart/
+        # https://finviz.com/quote.ashx?t=AAPL&p=d
+        # https://us.etrade.com/etx/mkt/quotes?symbol=AAPL#/snapshot
+
+    def go_site(self):
+        symbols = self.frame_data.get_symbols()
+        for symbol in symbols:
+            if self.http_link.get() == 'Yahoo Finance': webbrowser.open('https://finance.yahoo.com/quote/%s/chart/' % symbol)
+            # if self.http_link.get() == 'Etrade': webbrowser.open('https://us.etrade.com/etx/mkt/quotes?symbol=%s#/snapshot' % symbol)
+            if self.http_link.get() == 'Finviz': webbrowser.open('https://finviz.com/quote.ashx?t=%s' % symbol)
 
     def charts(self):
         symbols = self.frame_data.get_symbols()
@@ -38,6 +58,11 @@ class Analysis_Selection_GUI(tk.Toplevel):
         symbols = self.frame_data.get_symbols()
         if len(symbols) == 0: return
         Dividends_GUI(self, symbols)
+
+    def news(self):
+        symbols = self.frame_data.get_symbols()
+        if len(symbols) == 0: return
+        News_GUI(self, symbols)
 
     # def charts_sectors(self):
     #     symbols = self.frame_data.get_symbols()
@@ -105,7 +130,8 @@ class Frame_Tree(tk.Frame):
         if len(self.columns) > 0:
             column_width = int(1200 / len(self.columns))
             for column in self.columns:
-                self.tree.column(column, anchor=tk.W, width=column_width)
+                if column == 'symbol': self.tree.column(column, anchor=tk.W, width=60, minwidth=60, stretch=tk.NO)
+                else: self.tree.column(column, anchor=tk.W, width=column_width, stretch=tk.YES)
                 # self.tree.heading(column, text=column, anchor=tk.W, command = lambda _col=column: self.sort_tree_new(_col, False))
                 self.tree.heading(column, text=column, anchor=tk.W, command = lambda _col=column: self.sort_tree(_col))
 

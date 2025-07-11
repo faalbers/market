@@ -89,15 +89,24 @@ class Polygon_News(Polygon):
 
     def get_vault_data(self, data_name, columns, key_values):
         if data_name == 'news_polygon':
-            data = self.db.table_read_reference('ids', keys=key_values)
-            for symbol, ids in data.items():
-                df = self.db.table_read('news', keys=ids['ids'].tolist())
-                # df['timestamp'] = pd.to_datetime(df['published_utc'], format='%Y-%m-%dT%H:%M:%SZ').astype('int64') // 10**9
+            data = {}
+            ids_reference = self.db.table_read_reference('ids', keys=key_values)
+            for symbol, ids in ids_reference.items():
+                if len(columns) > 0:
+                    column_names = ['published_utc']+[x[0] for x in columns]
+                    df = self.db.table_read('news', keys=ids['ids'].tolist(), columns=column_names)
+                    columns_rename = {x[0]: x[1] for x in columns if (x[0] in df.columns) and (x[1] != None)}
+                    if len(columns_rename) > 0:
+                        df = df.rename(columns=columns_rename)
+                else:
+                    df = self.db.table_read('news', keys=ids['ids'].tolist())
                 df['date'] = pd.to_datetime(df['published_utc'], format='%Y-%m-%dT%H:%M:%SZ')
+                df = df.drop('published_utc', axis=1)
                 df.set_index('date', inplace=True)
                 df.sort_index(inplace=True)
-                print(symbol)
-                print(df)
+                data[symbol] = df
+
+            return (data, self.db.timestamp)
 
             # if len(columns) > 0:
             #     column_names = [x[0] for x in columns]
