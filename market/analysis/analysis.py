@@ -32,48 +32,71 @@ class Analysis():
         data = tickers.get_symbols_dataframe()
 
         # get analysis
+        print('Get Analysis:')
         analysis = tickers.get_analysis(update=update, forced=forced)
         analysis['type'] = data['type']
 
         # merge info
-        data = data.merge(analysis['info'], how='left', left_index=True, right_index=True)
+        print('Info:')
+        info = analysis['info']
+
+        # handle funds info
+        is_fund_overview = info['fund_overview'].notna()
+        info.loc[is_fund_overview, 'fund_category'] = info.loc[is_fund_overview, 'fund_overview'].apply(lambda x: x.get('categoryName'))
+        info.loc[is_fund_overview, 'fund_family'] = info.loc[is_fund_overview, 'fund_overview'].apply(lambda x: x.get('family'))
+        info = info.drop('fund_overview', axis=1)
+        
+        # handle growth estimates
+        is_growth_estimates = info['growth_estimates'].notna()
+        values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0q')).apply(lambda x: x.get('stockTrend'))*100
+        info.loc[is_growth_estimates, 'growth_trend_q_cur_%'] = values
+        values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1q')).apply(lambda x: x.get('stockTrend'))*100
+        info.loc[is_growth_estimates, 'growth_trend_q_next_%'] = values
+        values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0y')).apply(lambda x: x.get('stockTrend'))*100
+        info.loc[is_growth_estimates, 'growth_trend_y_cur_%'] = values
+        values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1y')).apply(lambda x: x.get('stockTrend'))*100
+        info.loc[is_growth_estimates, 'growth_trend_y_next_%'] = values
+        info = info.drop('growth_estimates', axis=1)
+
+        data = data.merge(info, how='left', left_index=True, right_index=True)
         
         # fix 'infinity' from info
         for column in data.columns[data.apply(lambda x: 'Infinity' in x.values)]:
             data.loc[data[column] == 'Infinity', column] = np.nan
 
         # get charts data and valid anaylsis
-        chart_data = self.__get_chart_data(analysis)
-        data = data.merge(chart_data, how='left', left_index=True, right_index=True)
+        if True:
+            chart_data = self.__get_chart_data(analysis)
+            data = data.merge(chart_data, how='left', left_index=True, right_index=True)
 
         # get ttm fundamentals
-        trailing = analysis['trailing'].copy()
-        if 'income_operating' in trailing.columns and 'revenue_total' in trailing.columns:
-            trailing['operating_profit_margin_ttm'] = trailing['income_operating'] / trailing['revenue_total']
-        if 'income_net' in trailing.columns and 'revenue_total' in trailing.columns:
-            trailing['net_profit_margin_ttm'] = trailing['income_net'] / trailing['revenue_total']
+        if True:
+            trailing = analysis['trailing'].copy()
+            if 'income_operating' in trailing.columns and 'revenue_total' in trailing.columns:
+                trailing['operating_profit_margin_ttm_%'] = (trailing['income_operating'] / trailing['revenue_total']) * 100
+            if 'income_net' in trailing.columns and 'revenue_total' in trailing.columns:
+                trailing['net_profit_margin_ttm_%_%'] = (trailing['income_net'] / trailing['revenue_total']) * 100
 
-        columns_keep = [
-            'eps',
-            'operating_profit_margin_ttm',
-            'net_profit_margin_ttm',
-        ]
-        columns = [c for c in trailing.columns if c in columns_keep]
-        trailing = trailing[columns]
+            columns_keep = [
+                'eps',
+                'operating_profit_margin_ttm_%',
+                'net_profit_margin_ttm_%',
+            ]
+            columns = [c for c in trailing.columns if c in columns_keep]
+            trailing = trailing[columns]
 
-        columns_rename = {
-            'eps': 'eps_ttm_fundamental',
-        }
-        trailing = trailing.rename(columns=columns_rename)
+            columns_rename = {
+                'eps': 'eps_ttm_fundamental',
+            }
+            trailing = trailing.rename(columns=columns_rename)
+            data = data.merge(trailing, how='left', left_index=True, right_index=True)
 
         # get periodic fundamentals
-        yearly = self.__get_fundamentals(analysis, 'yearly')
-        quarterly = self.__get_fundamentals(analysis, 'quarterly')
-
-        # merge them all together
-        data = data.merge(trailing, how='left', left_index=True, right_index=True)
-        data = data.merge(yearly, how='left', left_index=True, right_index=True)
-        data = data.merge(quarterly, how='left', left_index=True, right_index=True)
+        if True:
+            yearly = self.__get_fundamentals(analysis, 'yearly')
+            quarterly = self.__get_fundamentals(analysis, 'quarterly')
+            data = data.merge(yearly, how='left', left_index=True, right_index=True)
+            data = data.merge(quarterly, how='left', left_index=True, right_index=True)
 
         # sort columns
         columns_main = [c for c in ['name', 'type', 'sub_type', 'sector', 'industry'] if c in data.columns]
@@ -245,6 +268,7 @@ class Analysis():
     def __get_data(self, symbols, update, forced, cache_update=False):
         # check if database needs to be cached
         if update: cache_update = True
+        # TODO Needs status_db check to do it correctly
         analysis_timestamps = self.vault.get_db_timestamps('analysis')
         for db_name, db_timestamps in analysis_timestamps.items():
             if db_timestamps > self.db.timestamp: cache_update = True
