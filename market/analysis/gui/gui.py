@@ -123,6 +123,12 @@ class Analysis_GUI(tk.Tk):
                 if function == 'endswith':
                     or_select = or_select | (test_series.str.lower().str.endswith(value.lower()))
                     
+                if function == 'isna':
+                    or_select = or_select | (test_series.isna())
+                    
+                if function == 'notna':
+                    or_select = or_select | (test_series.notna())
+                    
             select = select & or_select
 
         return (self.analysis[select].index, columns)
@@ -130,10 +136,11 @@ class Analysis_GUI(tk.Tk):
     def analyze(self):
         symbols, columns = self.get_filtered()
         if len(columns) == 0:
-            columns = ['symbol'] + self.analysis.columns.tolist()
+            columns = ['symbol','name']
         else:
             columns.discard('symbol')
-            columns = ['symbol'] + [c for c in self.analysis.columns if c in columns]
+            columns.discard('name')
+            columns = ['symbol','name'] + [c for c in self.analysis.columns if c in columns]
         Analysis_Selection_GUI(self, symbols, columns)
 
 class Frame_Filters(tk.Frame):
@@ -264,6 +271,8 @@ class Filter(tk.Frame):
             'contains',
             'startswith',
             'endswith',
+            'isna',
+            'notna',
         ]
         self.function_select = tk.StringVar()
         if len(filter) > 0:
