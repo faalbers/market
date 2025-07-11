@@ -11,13 +11,14 @@ class YahooF():
     def __init__(self):
         return
     
-    def multi_execs(self, exec_list):
+    def multi_execs(self, exec_list, parent_name=''):
+        # TODO add parent name to log
         count_done = 0
         failed = 0
         failed_total = 0
         for exec in exec_list:
             if (count_done % 100) == 0:
-                self.logger.info('YahooF:  to do: %s , failed: %s' % (len(exec_list)-count_done, failed))
+                self.logger.info('YahooF:  %s: to do: %s , failed: %s' % (parent_name, len(exec_list)-count_done, failed))
                 self.db.commit()
                 failed = 0
             # gather symbol, procs to be handled and arguments
@@ -52,15 +53,15 @@ class YahooF():
             
             # manually stop if needed
             if stop_text():
-                self.logger.info('YahooF:  manually stopped multi_exec')
+                self.logger.info('YahooF:  %s: manually stopped multi_exec' % parent_name)
                 self.db.commit()
                 break
 
             # run a yfinance test every 100 entriesexec entries
             if (count_done % 100) == 0:
                 if not yfinancetest():
-                    self.logger.info('YahooF:  yfinance not ok ...')
+                    self.logger.info('YahooF:  %s: yfinance not ok ...' % parent_name)
                     break
                 else:
-                    self.logger.info('YahooF:  yfinance still ok ...')
-        self.logger.info('YahooF:  done: %s , failed: %s' % (count_done, failed_total))
+                    self.logger.info('YahooF:  %s: yfinance still ok ...' % parent_name)
+        self.logger.info('YahooF:  %s: done: %s , failed: %s' % (parent_name, count_done, failed_total))
