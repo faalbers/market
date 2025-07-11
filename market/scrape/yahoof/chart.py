@@ -91,7 +91,7 @@ class YahooF_Chart(YahooF):
             exec_entity = [symbol, [], {'ticker': None, 'data': [False, {}, {}]}]
             exec_entity[1].append(self.get_chart)
             exec_list.append(exec_entity)
-        self.multi_execs(exec_list)
+        self.multi_execs(exec_list, 'Chart')
 
     def update_check(self, symbols):
         timestamp_pdt = int(datetime.now().timestamp())

@@ -235,7 +235,7 @@ class YahooF_Fundamental(YahooF):
             if len(exec_entity[1]) > 0:
                 exec_list.append(exec_entity)
 
-        self.multi_execs(exec_list)
+        self.multi_execs(exec_list, 'Fundamental')
 
     def update_check(self, symbols, forced=False):
         status_db = self.db.table_read('status_db', keys=symbols)

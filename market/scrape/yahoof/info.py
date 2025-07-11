@@ -287,7 +287,7 @@ class YahooF_Info(YahooF):
                     exec_entity[1].append(self.get_top_holdings)
             if len(exec_entity[1]) > 1:
                 exec_list.append(exec_entity)
-        self.multi_execs(exec_list)
+        self.multi_execs(exec_list, 'Info')
 
 
     def update_check(self, symbols, forced=False):
@@ -311,7 +311,7 @@ class YahooF_Info(YahooF):
 
         found = status_db['found'] > 0
 
-        # found and last read more then one month ago
+        # found and last read more then five days ago
         five_days = found & (status_db['timestamp'] < five_days_ts)
         
         # not found and last read more then a half year ago
@@ -426,4 +426,16 @@ class YahooF_Info(YahooF):
                 return (data, self.db.timestamp)
             else:
                 data = self.db.table_read('info', keys=key_values)
+                return (data, self.db.timestamp)
+        elif data_name == 'upgrades_downgrades':
+            if len(columns) > 0:
+                column_names = [x[0] for x in columns]
+                data = self.db.timeseries_read('upgrades_downgrades', keys=key_values, columns=column_names)
+                columns_rename = {x[0]: x[1] for x in columns if x[1] != None}
+                if len(columns_rename) > 0:
+                    for symbol in data:
+                        data[symbol] = data[symbol].rename(columns=columns_rename)
+                return (data, self.db.timestamp)
+            else:
+                data = self.db.timeseries_read('upgrades_downgrades', keys=key_values)
                 return (data, self.db.timestamp)
