@@ -4,6 +4,7 @@
 /docs
 /testscripts
 /academy
+/settings
 __pycache__
 *.db
 *.pickle
