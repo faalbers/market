@@ -311,10 +311,14 @@ class Filter(tk.Frame):
             self.value = tk.Entry(self, width=37)
             self.value.grid(row=0, column=5)
         elif len(values) <= 200:
-            self.value_select.set(values[0])
-            self.value = tk.OptionMenu(self, self.value_select, *values)
-            self.value.config(width=30)
-            self.value.grid(row=0, column=5)
+            if isinstance(values[0], str):
+                self.value_select.set(values[0])
+                self.value = tk.OptionMenu(self, self.value_select, *values)
+                self.value.config(width=30)
+                self.value.grid(row=0, column=5)
+            else:
+                self.value = tk.Entry(self, width=37)
+                self.value.grid(row=0, column=5)
         else:
             self.value = tk.Entry(self, width=37)
             self.value.grid(row=0, column=5)
