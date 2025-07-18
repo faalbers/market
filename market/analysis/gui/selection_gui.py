@@ -4,6 +4,7 @@ from pprint import pp
 import numpy as np
 from .charts_gui import Charts_GUI
 from .dividends_gui import Dividends_GUI
+from .fundamentals_gui import Fundamentals_GUI
 from .news_gui import News_GUI
 import webbrowser
 
@@ -28,10 +29,12 @@ class Analysis_Selection_GUI(tk.Toplevel):
         # add actions
         tk.Button(frame_actions, text='Charts', command=self.charts).pack(side='left')
         tk.Button(frame_actions, text='Dividends', command=self.dividends).pack(side='left')
+        tk.Button(frame_actions, text='Fundamentals', command=self.fundamentals).pack(side='left')
         tk.Button(frame_actions, text='News', command=self.news).pack(side='left')
         tk.Button(frame_actions, text='Go', command=self.go_site).pack(side='right')
         http_links = [
-            'Yahoo Finance',
+            'Yahoo Finance Chart',
+            'Yahoo Finance Compare',
             # 'Etrade',
             'Finviz',
         ]
@@ -41,13 +44,19 @@ class Analysis_Selection_GUI(tk.Toplevel):
         # https://finance.yahoo.com/quote/AAPL/chart/
         # https://finviz.com/quote.ashx?t=AAPL&p=d
         # https://us.etrade.com/etx/mkt/quotes?symbol=AAPL#/snapshot
+        # https://finance.yahoo.com/compare?comps=MP,PANW
 
     def go_site(self):
         symbols = self.frame_data.get_symbols()
-        for symbol in symbols:
-            if self.http_link.get() == 'Yahoo Finance': webbrowser.open('https://finance.yahoo.com/quote/%s/chart/' % symbol)
-            # if self.http_link.get() == 'Etrade': webbrowser.open('https://us.etrade.com/etx/mkt/quotes?symbol=%s#/snapshot' % symbol)
-            if self.http_link.get() == 'Finviz': webbrowser.open('https://finviz.com/quote.ashx?t=%s' % symbol)
+        http_link = self.http_link.get()
+        print(http_link, symbols)
+        if http_link == 'Yahoo Finance Compare':
+            webbrowser.open('https://finance.yahoo.com/compare?comps=%s' % ','.join(symbols))
+        else:
+            for symbol in symbols:
+                if http_link == 'Yahoo Finance Chart': webbrowser.open('https://finance.yahoo.com/quote/%s/chart/' % symbol)
+                # if self.http_link.get() == 'Etrade': webbrowser.open('https://us.etrade.com/etx/mkt/quotes?symbol=%s#/snapshot' % symbol)
+                if http_link == 'Finviz': webbrowser.open('https://finviz.com/quote.ashx?t=%s' % symbol)
 
     def charts(self):
         symbols = self.frame_data.get_symbols()
@@ -58,6 +67,11 @@ class Analysis_Selection_GUI(tk.Toplevel):
         symbols = self.frame_data.get_symbols()
         if len(symbols) == 0: return
         Dividends_GUI(self, symbols)
+
+    def fundamentals(self):
+        symbols = self.frame_data.get_symbols()
+        if len(symbols) == 0: return
+        Fundamentals_GUI(self, symbols)
 
     def news(self):
         symbols = self.frame_data.get_symbols()

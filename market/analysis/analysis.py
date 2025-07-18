@@ -34,6 +34,7 @@ class Analysis():
         # get analysis
         print('Get Analysis:')
         analysis = tickers.get_analysis(update=update, forced=forced)
+        print('Get Analysis: done')
         analysis['type'] = data['type']
 
         # merge info
@@ -41,22 +42,24 @@ class Analysis():
         info = analysis['info']
 
         # handle funds info
-        is_fund_overview = info['fund_overview'].notna()
-        info.loc[is_fund_overview, 'fund_category'] = info.loc[is_fund_overview, 'fund_overview'].apply(lambda x: x.get('categoryName'))
-        info.loc[is_fund_overview, 'fund_family'] = info.loc[is_fund_overview, 'fund_overview'].apply(lambda x: x.get('family'))
-        info = info.drop('fund_overview', axis=1)
+        if True:
+            is_fund_overview = info['fund_overview'].notna()
+            info.loc[is_fund_overview, 'fund_category'] = info.loc[is_fund_overview, 'fund_overview'].apply(lambda x: x.get('categoryName'))
+            info.loc[is_fund_overview, 'fund_family'] = info.loc[is_fund_overview, 'fund_overview'].apply(lambda x: x.get('family'))
+            info = info.drop('fund_overview', axis=1)
         
         # handle growth estimates
-        is_growth_estimates = info['growth_estimates'].notna()
-        values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0q')).apply(lambda x: x.get('stockTrend'))*100
-        info.loc[is_growth_estimates, 'growth_trend_q_cur_%'] = values
-        values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1q')).apply(lambda x: x.get('stockTrend'))*100
-        info.loc[is_growth_estimates, 'growth_trend_q_next_%'] = values
-        values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0y')).apply(lambda x: x.get('stockTrend'))*100
-        info.loc[is_growth_estimates, 'growth_trend_y_cur_%'] = values
-        values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1y')).apply(lambda x: x.get('stockTrend'))*100
-        info.loc[is_growth_estimates, 'growth_trend_y_next_%'] = values
-        info = info.drop('growth_estimates', axis=1)
+        if True:
+            is_growth_estimates = info['growth_estimates'].notna()
+            values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0q')).apply(lambda x: x.get('stockTrend'))*100
+            info.loc[is_growth_estimates, 'growth_trend_q_cur_%'] = values
+            values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1q')).apply(lambda x: x.get('stockTrend'))*100
+            info.loc[is_growth_estimates, 'growth_trend_q_next_%'] = values
+            values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0y')).apply(lambda x: x.get('stockTrend'))*100
+            info.loc[is_growth_estimates, 'growth_trend_y_cur_%'] = values
+            values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1y')).apply(lambda x: x.get('stockTrend'))*100
+            info.loc[is_growth_estimates, 'growth_trend_y_next_%'] = values
+            info = info.drop('growth_estimates', axis=1)
 
         data = data.merge(info, how='left', left_index=True, right_index=True)
         
@@ -73,9 +76,17 @@ class Analysis():
         if True:
             trailing = analysis['trailing'].copy()
             if 'income_operating' in trailing.columns and 'revenue_total' in trailing.columns:
-                trailing['operating_profit_margin_ttm_%'] = (trailing['income_operating'] / trailing['revenue_total']) * 100
+                column_name = 'operating_profit_margin_ttm_%'
+                trailing[column_name] = np.nan
+                is_revenue = (trailing['revenue_total'] > 0.0) & (trailing['income_operating'] <= trailing['revenue_total'])
+                trailing.loc[is_revenue, column_name] = \
+                    (trailing.loc[is_revenue, 'income_operating'] / trailing.loc[is_revenue, 'revenue_total']) * 100
             if 'income_net' in trailing.columns and 'revenue_total' in trailing.columns:
-                trailing['net_profit_margin_ttm_%_%'] = (trailing['income_net'] / trailing['revenue_total']) * 100
+                column_name = 'net_profit_margin_ttm_%'
+                trailing[column_name] = np.nan
+                is_revenue = (trailing['revenue_total'] > 0.0) & (trailing['income_net'] <= trailing['revenue_total'])
+                trailing.loc[is_revenue, column_name] = \
+                    (trailing.loc[is_revenue, 'income_net'] / trailing.loc[is_revenue, 'revenue_total']) * 100
 
             columns_keep = [
                 'eps',
@@ -86,9 +97,10 @@ class Analysis():
             trailing = trailing[columns]
 
             columns_rename = {
-                'eps': 'eps_ttm_fundamental',
+                'eps': 'eps_ttm_fundamental_$',
             }
             trailing = trailing.rename(columns=columns_rename)
+
             data = data.merge(trailing, how='left', left_index=True, right_index=True)
 
         # get periodic fundamentals
@@ -117,17 +129,18 @@ class Analysis():
         chart_data = pd.DataFrame()
 
         now = pd.Timestamp.now()
-        # two_months_ago = pd.Timestamp.now() - pd.DateOffset(months=2)
-        # one_year_ago = pd.Timestamp.now() - pd.DateOffset(years=1)
         for symbol, chart in analysis['chart'].items():
-            # find of stock is still active
+            # find if stock is still active
             chart_volume = chart[chart['volume'] > 0]
             chart_data.loc[symbol, 'active'] = False
             symbol_type = analysis['type'].loc[symbol]
-            if symbol_type == 'EQUITY':
+            if symbol_type in ['EQUITY', 'ETF']:
+                # only check volume on EQUITY and ETF stocks
+                # Mutual funds and indices typically don't have volume data displayed on their charts
                 if chart_volume.empty: continue
                 inactive_days = (now - (chart_volume.index[-1])).days
                 if inactive_days > 30: continue
+
             chart_data.loc[symbol, 'active'] = True
             
             # get dividends data
@@ -139,9 +152,13 @@ class Analysis():
             if chart_dividends.empty: continue
 
             # yearly dividends data
+
+            # get range between first full year and last full year
             first_year = chart_dividends.index[0].year + 1
             last_year = datetime.now().year-1
             chart_dividends_yearly = chart_dividends[(chart_dividends.index.year >= first_year) & (chart_dividends.index.year <= last_year)]
+            
+            # find yearly data
             dividends = chart_dividends_yearly['dividends'].groupby(chart_dividends_yearly.index.year)
             price = chart_dividends_yearly['price'].groupby(chart_dividends_yearly.index.year)
             dividend_count_yearly = dividends.size()
@@ -149,17 +166,32 @@ class Analysis():
             dividend_price_yearly = price.mean()
             years_count = dividend_count_yearly.shape[0]
             chart_data.loc[symbol, 'dividend_years'] = years_count
+            count_per_year = dividend_count_yearly.mean()
+            chart_data.loc[symbol, 'dividend_count_yearly'] = count_per_year
 
-            # get trends and stds
+            # get trends and stds for yearly data
             if years_count > 1:
+                # calculate polyfit trend
                 slope, start = np.polyfit(range(years_count), dividend_rate_yearly.values, 1)
                 trend = range(years_count)*slope + start
-                trend_mean = np.mean(trend)
-                dividend_rate_yearly_trend_percent = ((trend[-1] - trend[0]) / trend_mean) * 100
-                chart_data.loc[symbol, 'dividend_rate_yearly_trend_%'] = dividend_rate_yearly_trend_percent
-                dividend_rate_yearly_flat = dividend_rate_yearly - trend + trend_mean
-                dividend_rate_yearly_std_percent = (dividend_rate_yearly_flat.std() / dividend_rate_yearly_flat.mean()) * 100
+
+                # get trend end value
+                trend_end_value = trend[-1]
+
+                # get trend percentage from trend end value
+                dividend_rate_yearly_trend_percent = (slope / trend_end_value) * 100
+                chart_data.loc[symbol, 'dividend_rate_yearly_%_trend'] = dividend_rate_yearly_trend_percent
+                
+                # get standard deviation from zero flatline
+                dividend_rate_yearly_std = (dividend_rate_yearly - trend).std()
+
+                # get std deviation percentage from trend end value
+                dividend_rate_yearly_std_percent = (dividend_rate_yearly_std / trend_end_value ) * 100
                 chart_data.loc[symbol, 'dividend_rate_yearly_std_%'] = dividend_rate_yearly_std_percent
+
+            else:
+                chart_data.loc[symbol, 'dividend_rate_yearly_%_trend'] = 0.0
+                chart_data.loc[symbol, 'dividend_rate_yearly_std_%'] = 0.0
 
             # get last year data
             if last_year in dividend_rate_yearly.index:
@@ -169,85 +201,151 @@ class Analysis():
                 chart_data.loc[symbol, 'dividend_yield_last_year_%'] = dividend_yield_last_year_percent
             
             # get ttm data
-            dividends_ttm = chart_dividends.loc[chart_dividends.index > (datetime.now() - pd.DateOffset(months=12))]['dividends']
+            dividends_ttm = chart_dividends.loc[chart_dividends.index > (pd.Timestamp.now() - pd.DateOffset(months=12))]['dividends']
             if not dividends_ttm.empty:
                 dividend_count_ttm = dividends_ttm.shape[0]
                 dividend_rate_ttm = dividends_ttm.sum()
-                # chart_data.loc[symbol, 'dividends_rate_ttm_$'] = dividend_rate_ttm
+                # chart_data.loc[symbol, 'dividend_rate_ttm_$'] = dividend_rate_ttm
                 dividends_yield_ttm_percent = (dividend_rate_ttm / chart['price'].iloc[-1]) * 100
-                chart_data.loc[symbol, 'dividends_yield_ttm_%'] = dividends_yield_ttm_percent
-                if last_year in dividend_rate_yearly.index:
-                    dividends_rate_ttm_trend_percent = ((dividend_rate_ttm / dividend_rate_last_year) * 100) - 100
-                    chart_data.loc[symbol, 'dividends_rate_ttm_trend_%'] = dividends_rate_ttm_trend_percent
-            
+                chart_data.loc[symbol, 'dividend_yield_ttm_%'] = dividends_yield_ttm_percent
+                chart_data.loc[symbol, 'dividend_count_ttm'] = dividend_count_ttm
+                
+                # get ttm trend
+                if dividend_count_ttm > 1:
+                    # calculate polyfit trend
+                    slope, start = np.polyfit(range(dividend_count_ttm), dividends_ttm.values, 1)
+                    trend = range(dividend_count_ttm)*slope + start
+
+                    # get trend end value
+                    trend_end_value = trend[-1]
+
+                    # get trend percentage from trend end value
+                    dividend_rate_ttm_trend_percent = ((trend_end_value - start) / trend_end_value) * 100
+                    chart_data.loc[symbol, 'dividend_rate_ttm_%_trend'] = dividend_rate_ttm_trend_percent
+                    
+                    # get standard deviation from zero flatline
+                    dividend_rate_ttm_std = (dividends_ttm - trend).std()
+
+                    # get std deviation percentage from trend end value
+                    dividend_rate_ttm_std_percent = (dividend_rate_ttm_std / trend_end_value ) * 100
+                    chart_data.loc[symbol, 'dividend_rate_ttm_std_%'] = dividend_rate_ttm_std_percent
+
+
+                else:
+                    chart_data.loc[symbol, 'dividend_rate_ttm_%_trend'] = 0.0
+                    chart_data.loc[symbol, 'dividend_rate_ttm_std_%'] = 0.0
+
+                # if last_year in dividend_rate_yearly.index:
+                #     dividends_rate_ttm_trend_percent = ((dividend_rate_ttm / dividend_rate_last_year) * 100) - 100
+                #     chart_data.loc[symbol, 'dividends_rate_ttm_trend_%'] = dividends_rate_ttm_trend_percent
         return chart_data
 
     def __get_fundamentals(self, analysis, period):
         print('fundamentals: %s' % period)
         period_single = period.rstrip('ly')
         df_period = pd.DataFrame()
-        do_save = True
+        this_year = datetime.now().year
         for symbol, period_symbol in analysis[period].items():
             period_symbol = period_symbol.dropna(how='all').copy()
-            year_count = period_symbol.shape[0]
+            if period_symbol.shape[0] == 0: continue
+            if (this_year -period_symbol.index[-1].year) > 1: continue
+            period_count = period_symbol.shape[0]
 
             # add metrics
             if 'debt_current' in period_symbol.columns and 'cash' in period_symbol.columns:
-                period_symbol['debt_v_cash_%s_%%' % (period_single)] = (period_symbol['debt_current'] / period_symbol['cash'])*100
+                column_name = 'cash_position_%s' % (period_single)
+                period_symbol[column_name] = period_symbol['debt_current'] / period_symbol['cash']
             if 'assets_current' in period_symbol.columns and 'liabilities_current' in period_symbol.columns:
-                period_symbol['liquidity_%s_%%' % (period_single)] = (period_symbol['assets_current'] / period_symbol['liabilities_current'])*100
+                column_name = 'liquidity_%s' % (period_single)
+                period_symbol[column_name] = period_symbol['assets_current'] / period_symbol['liabilities_current']
             if 'income_operating' in period_symbol.columns and 'revenue_total' in period_symbol.columns:
-                period_symbol['operating_profit_margin_%s_%%' % (period_single)] = (period_symbol['income_operating'] / period_symbol['revenue_total'])*100
+                column_name = 'operating_profit_margin_%s_%%' % (period_single)
+                period_symbol[column_name] = np.nan
+                is_revenue = (period_symbol['revenue_total'] > 0.0) & (period_symbol['income_operating'] <= period_symbol['revenue_total'])
+                period_symbol.loc[is_revenue, column_name] = \
+                    (period_symbol.loc[is_revenue, 'income_operating'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
             if 'income_net' in period_symbol.columns and 'revenue_total' in period_symbol.columns:
-                period_symbol['net_profit_margin_%s_%%' % (period_single)] = (period_symbol['income_net'] / period_symbol['revenue_total'])*100
+                column_name = 'net_profit_margin_%s_%%' % (period_single)
+                period_symbol[column_name] = np.nan
+                is_revenue = (period_symbol['revenue_total'] > 0.0) & (period_symbol['income_net'] <= period_symbol['revenue_total'])
+                period_symbol.loc[is_revenue, column_name] = \
+                    (period_symbol.loc[is_revenue, 'income_net'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
             if 'free_cash_flow' in period_symbol.columns:
                 period_symbol = period_symbol.rename(columns={'free_cash_flow': 'free_cash_flow_%s' % (period_single)})
 
-            # calculate trends
-            if year_count > 1:
-                trends = period_symbol.dropna(axis=1, how='all').apply(lambda x: np.polyfit(range(year_count), x, 1)).head(1)
-                trends = trends / period_symbol.iloc[0]
-                trends.index = [symbol]
-                trends.index.name = 'symbol'
-                rename_trends = {c: '%s_trend' % (c) for c in trends.columns}
-                trends = trends.rename(columns=rename_trends)
+            # calculate trends and standard deviation
+            if period_count > 1:
+                # prepare period trends calculation
+                period_values = period_symbol.dropna(axis=1, how='all').copy()
+
+                # to avoid errors with polyfit
+                period_values = period_values.ffill().bfill()
+                period_values = period_values.reset_index(drop=True)
+
+                # get slope and start
+                period_values_polyfit = period_values.apply(lambda x: np.polyfit(range(period_count), x, 1))
+                period_trends_line = period_values_polyfit.apply(lambda x: (x[0]*range(period_count) + x[1]))
+
+                # get trends
+                period_trends = period_values_polyfit.iloc[0]
+                period_trends.name = symbol
+                period_trends = pd.DataFrame(period_trends).T
+                rename_trends = {c: '%s_trend' % (c) for c in period_trends.columns}
+                period_trends = period_trends.rename(columns=rename_trends)
+
+                # get standard deviation from zero flatline
+                period_std = (period_values - period_trends_line).std()
+                period_std.name = symbol
+                period_std = pd.DataFrame(period_std).T
+                rename_std = {c: '%s_std' % (c) for c in period_std.columns}
+                period_std = period_std.rename(columns=rename_std)
+
+                # merge them together
+                period_trends = period_trends.merge(period_std, how='left', left_index=True, right_index=True)
 
             # last year entries
             period_symbol = period_symbol.tail(1).copy()
             period_symbol.index = [symbol]
             period_symbol.index.name = 'symbol'
 
-            if year_count > 1:
-                period_symbol = period_symbol.merge(trends, how='left', left_index=True, right_index=True)
+            if period_count > 1:
+                period_symbol = period_symbol.merge(period_trends, how='left', left_index=True, right_index=True)
             period_symbol = period_symbol.dropna(axis=1)
             
             if df_period.empty:
                 df_period = period_symbol
             elif not period_symbol.empty:
                 df_period = pd.concat([df_period,  period_symbol])
-        
+
         columns_keep = [
             'eps',
             'eps_trend',
-            'debt_v_cash_%s_%%' % (period_single),
-            'debt_v_cash_%s_%%_trend' % (period_single),
-            'liquidity_%s_%%' % (period_single),
-            'liquidity_%s_%%_trend' % (period_single),
+            'eps_std',
+            'cash_position_%s' % (period_single),
+            'cash_position_%s_trend' % (period_single),
+            'cash_position_%s_std' % (period_single),
+            'liquidity_%s' % (period_single),
+            'liquidity_%s_trend' % (period_single),
+            'liquidity_%s_std' % (period_single),
             'operating_profit_margin_%s_%%' % (period_single),
             'operating_profit_margin_%s_%%_trend' % (period_single),
+            'operating_profit_margin_%s_%%_std' % (period_single),
             'net_profit_margin_%s_%%' % (period_single),
             'net_profit_margin_%s_%%_trend' % (period_single),
+            'net_profit_margin_%s_%%_std' % (period_single),
             'free_cash_flow_%s_trend' % (period_single),
+            'free_cash_flow_%s_std' % (period_single),
         ]
         columns = [c for c in df_period.columns if c in columns_keep]
         df_period = df_period[columns]
 
         columns_rename = {
-            'eps': 'eps_%s' % (period_single),
-            'eps_trend': 'eps_%s_trend' % (period_single),
+            'eps': 'eps_%s_$' % (period_single),
+            'eps_trend': 'eps_%s_$_trend' % (period_single),
+            'eps_std': 'eps_%s_$_std' % (period_single),
         }
         df_period = df_period.rename(columns=columns_rename)
-
+       
         return df_period
 
     def __cache_get(self, symbols, update, forced):

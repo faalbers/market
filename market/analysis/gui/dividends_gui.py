@@ -5,6 +5,7 @@ from ...tickers import Tickers
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from dateutil.relativedelta import relativedelta
 
 class Dividends_GUI(tk.Toplevel):
     def __init__(self, parent, symbols):
@@ -35,13 +36,32 @@ class Dividends_GUI(tk.Toplevel):
         self.end_date.bind("<<DateEntrySelected>>", self.date_changed)
         self.end_date.pack(side='left')
 
-        self.auto_update_date = tk.BooleanVar()
-        self.auto_update_date.set(True)
-        tk.Checkbutton(frame_bottom_options, text='auto date', variable=self.auto_update_date).pack(side='left')
+        date_range = [
+            'range all',
+            'range ttm',
+            'range year to date',
+            'range 3 years',
+            'range 5 years',
+        ]
+        self.date_range = tk.StringVar()
+        self.date_range.set(date_range[0])
+        tk.OptionMenu(frame_bottom_options, self.date_range, *date_range, command=self.date_range_changed).pack(side='left')
 
-        self.yearly_dividends = tk.BooleanVar()
-        self.yearly_dividends.set(True)
-        tk.Checkbutton(frame_bottom_options, text='yearly', variable=self.yearly_dividends, command=self.plot_compare).pack(side='left')
+        # self.auto_update_date = tk.BooleanVar()
+        # self.auto_update_date.set(False)
+        # tk.Checkbutton(frame_bottom_options, text='auto date', variable=self.auto_update_date).pack(side='left')
+
+        # self.yearly_dividends = tk.BooleanVar()
+        # self.yearly_dividends.set(False)
+        # tk.Checkbutton(frame_bottom_options, text='yearly', variable=self.yearly_dividends, command=self.plot_compare).pack(side='left')
+        sum_range = [
+            'no sum',
+            'sum ttm',
+            'sum yearly',
+        ]
+        self.sum_range = tk.StringVar()
+        self.sum_range.set(sum_range[0])
+        tk.OptionMenu(frame_bottom_options, self.sum_range, *sum_range, command=self.sum_range_changed).pack(side='left')
 
         self.yield_dividends = tk.BooleanVar()
         self.yield_dividends.set(False)
@@ -71,13 +91,36 @@ class Dividends_GUI(tk.Toplevel):
             # add dividend yields
             self.dividend_yields = self.dividend_yields.merge(dividends['Yields'], how='outer', left_index=True, right_index=True)
             self.dividend_yields = self.dividend_yields.rename(columns={'Yields': symbol})
-            
+        
+        # create ttm dates for sum collection
+        now = pd.Timestamp.now()
+        today = pd.Timestamp(now.year, now.month, now.day) + pd.DateOffset(days=1)
+        self.dates_ttm = pd.Series([(today - pd.DateOffset(years=y)) for y in range(10)]).iloc[::-1]
+
+        # create yearly dates for sum collection
+        last_year_day = pd.Timestamp(now.year, 1, 1)
+        self.dates_yearly = pd.Series([(last_year_day - pd.DateOffset(years=y)) for y in range(10)]).iloc[::-1]
+
+    def date_range_changed(self, date_range):
+        self.set_dates()
+        self.plot_compare()
+    
+    def sum_range_changed(self, sum_range):
+        self.plot_compare()
+
     def set_dates(self):
         dividends = self.dividends[self.symbols]
         start_date = dividends.index[0]
-        end_date = dividends.index[-1]
+        date_range = self.date_range.get()
+        if date_range == 'range ttm':
+            start_date = pd.Timestamp.now() - pd.DateOffset(months=12)
+        elif date_range == 'range year to date':
+            start_date = pd.Timestamp(pd.Timestamp.now().year, 1, 1)
+        elif date_range == 'range 3 years':
+            start_date = pd.Timestamp.now() - pd.DateOffset(years=3)
+        elif date_range == 'range 5 years':
+            start_date = pd.Timestamp.now() - pd.DateOffset(years=5)
         self.start_date.set_date(start_date)
-        self.end_date.set_date(end_date)
 
     def get_dividends(self):
         start_date = self.start_date.get_date()
@@ -96,15 +139,52 @@ class Dividends_GUI(tk.Toplevel):
         else:
             dividends = self.get_dividends()
             y_label = 'amount/share $'
-        if self.yearly_dividends.get():
-            dividends = dividends.groupby(dividends.index.year).sum()
-        else:
+        # print(dividends)
+        # now = pd.Timestamp.now()
+        # print(dividends.groupby(dividends.index.map(lambda x: relativedelta(now, x).years)).sum())
+        
+        # dividends.index = dividends.index.date
+        now = pd.Timestamp.now()
+        last_year = now.year - 1
+
+        # show by grouped range
+        sum_range = self.sum_range.get()
+        start_date = pd.Timestamp(self.start_date.get_date())
+        end_date = pd.Timestamp(self.end_date.get_date())
+        if sum_range == 'no sum':
             dividends.index = dividends.index.date
+        if sum_range == 'sum ttm':
+            # set lock dates to full sum ttm range
+            start_date_ttm = self.dates_ttm[self.dates_ttm >= start_date].iloc[0]
+            end_date_ttm = self.dates_ttm[self.dates_ttm <= (end_date + pd.DateOffset(days=1))].iloc[-1] - pd.DateOffset(days=1)
+            dividends = dividends[start_date_ttm:end_date_ttm]
+            
+            # group by years ago
+            dividends = dividends.groupby(dividends.index.map(lambda x: relativedelta(now, x).years)).sum()
+            dividends.sort_index(ascending=False, inplace=True)
+            dividends.index.name = 'year trailing'
+        
+        elif sum_range == 'sum yearly':
+            # set lock dates to full sum yearly range
+            start_date_yearly = self.dates_yearly[self.dates_yearly >= start_date].iloc[0]
+            end_date_yearly = self.dates_yearly[self.dates_yearly <= (end_date + pd.DateOffset(days=1))].iloc[-1] - pd.DateOffset(days=1)
+            dividends = dividends[start_date_yearly:end_date_yearly]
+            
+            # group by yearly range
+            dividends = dividends.groupby(dividends.index.year).sum()
+            dividends = dividends
+            dividends.index.name = 'year'
+        
+        # if self.yearly_dividends.get():
+        #     dividends = dividends.groupby(dividends.index.year).sum()
+        # else:
+        #     dividends.index = dividends.index.date
 
         fig, ax = plt.subplots()
         if not dividends.empty:
             dividends.plot(ax=ax, kind='bar')
             ax.set_ylabel(y_label)
+            ax.grid(True, linestyle='--', linewidth=0.5, color='gray')
             # ax.bar(dividends.index, dividends, color='green', alpha=0.5, width=bar_width)
             # bar_width = dividends.shape[0] / 75.0
             # ax.bar(dividends.index, dividends, alpha=0.5, width=bar_width)
@@ -123,14 +203,17 @@ class Dividends_GUI(tk.Toplevel):
             self.frame_dividends.destroy()
         self.frame_dividends = Frame_Dividends(self.frame_dividends_holder, self.symbols)
         self.frame_dividends.pack(expand=True, fill='both')
-        if self.auto_update_date.get():
-            self.set_dates()
+        # if self.auto_update_date.get():
+        #     self.set_dates()
+        self.symbols = self.symbols[:1]
+        self.set_dates()
         self.plot_compare()
 
     def symbols_changed(self, symbols):
         self.symbols = symbols
-        if self.auto_update_date.get():
-            self.set_dates()
+        # if self.auto_update_date.get():
+        #     self.set_dates()
+        self.set_dates()
         self.plot_compare()
 
     def date_changed(self, event):
@@ -177,7 +260,7 @@ class Frame_Symbols(ttk.Frame):
         self.symbols_state = {}
         for symbol in symbols:
             self.symbols_state[symbol] = tk.IntVar()
-            self.symbols_state[symbol].set(1)
+            # self.symbols_state[symbol].set(1)
             check_button = tk.Checkbutton(self.frame_checkboxes, text=symbol,
                 variable=self.symbols_state[symbol], command=self.check_changed)
             check_button.bind('<MouseWheel>', self.mouse_scroll)
@@ -185,6 +268,7 @@ class Frame_Symbols(ttk.Frame):
             check_button.pack(anchor='w')
             if check_button.winfo_reqwidth() > widest_check: widest_check = check_button.winfo_reqwidth()
             height_check += check_button.winfo_reqheight()
+        self.symbols_state[symbols[0]].set(1)
         self.canvas.config(width=widest_check)
         self.canvas.config(scrollregion=(0,0,widest_check, height_check))
 

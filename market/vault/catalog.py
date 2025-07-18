@@ -46,23 +46,39 @@ class Catalog():
                 'trailing': [
                     ['TotalRevenue', 'revenue_total'],
                     ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-                    ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
-                    ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
-                    ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
+                    ['OperatingIncome', 'income_operating'],
+                    
+                    # ['DilutedEPS', 'eps'],
                 ],
                 'yearly': [
                     ['TotalRevenue', 'revenue_total'],
                     ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-                    ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
-                    ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
-                    ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
+                    ['OperatingIncome', 'income_operating'],
+                    
+                    # ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
+                    # ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
+                    # ['CurrentLiabilities', 'liabilities_current'],
+                    # ['CurrentAssets', 'assets_current'],
+
+                    # ['FreeCashFlow', 'free_cash_flow'],
+                    
+                    # ['DilutedEPS', 'eps'],
+
+                    # ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
                 ],
                 'quarterly': [
                     ['TotalRevenue', 'revenue_total'],
                     ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-                    ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
-                    ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
-                    ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
+                    ['OperatingIncome', 'income_operating'],
+                    
+                    # ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
+                    # ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
+                    # ['CurrentLiabilities', 'liabilities_current'],
+                    # ['CurrentAssets', 'assets_current'],
+
+                    # ['FreeCashFlow', 'free_cash_flow'],
+
+                    # ['DilutedEPS', 'eps'],
                 ],
             },
         },
