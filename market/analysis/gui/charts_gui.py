@@ -53,10 +53,18 @@ class Charts_GUI(tk.Toplevel):
         self.end_date.bind("<<DateEntrySelected>>", self.date_changed)
         self.end_date.pack(side='left')
 
-        self.auto_update_date = tk.BooleanVar()
-        self.auto_update_date.set(True)
-        tk.Checkbutton(frame_bottom_options, text='auto date', variable=self.auto_update_date).pack(side='left')
-        
+        auto_date_range = [
+            'auto date all',
+            'auto date ttm',
+            'auto date year to date',
+            'auto date 3 years',
+            'auto date 5 years',
+            'no auto date'
+        ]
+        self.auto_date_range = tk.StringVar()
+        self.auto_date_range.set(auto_date_range[0])
+        tk.OptionMenu(frame_bottom_options, self.auto_date_range, *auto_date_range, command=self.auto_date_range_changed).pack(side='left')
+
         self.sector_relative = tk.BooleanVar()
         tk.Checkbutton(frame_bottom_options, text='sector relative',
             variable=self.sector_relative,
@@ -67,11 +75,31 @@ class Charts_GUI(tk.Toplevel):
 
     def sector_relative_changed(self):
         self.plot_compare()
-        
+
+    def auto_date_range_changed(self, auto_date_range):
+        self.plot_compare()
+
     def set_dates(self):
-        charts = self.charts[self.symbols].ffill().dropna()
-        start_date = charts.index[0]
-        end_date = charts.index[-1]
+        auto_date_range = self.auto_date_range.get()
+        print(auto_date_range)
+        if auto_date_range == 'no auto date':
+            return
+        elif auto_date_range == 'auto date all':
+            charts = self.charts[self.symbols].ffill().dropna()
+            start_date = charts.index[0]
+            end_date = charts.index[-1]
+        elif auto_date_range == 'auto date ttm':
+            start_date = pd.Timestamp.now() - pd.DateOffset(months=12)
+            end_date = pd.Timestamp.now()
+        elif auto_date_range == 'auto date year to date':
+            start_date = pd.Timestamp(pd.Timestamp.now().year, 1, 1)
+            end_date = pd.Timestamp.now()
+        elif auto_date_range == 'auto date 3 years':
+            start_date = pd.Timestamp.now() - pd.DateOffset(years=3)
+            end_date = pd.Timestamp.now()
+        elif auto_date_range == 'auto date 5 years':
+            start_date = pd.Timestamp.now() - pd.DateOffset(years=5)
+            end_date = pd.Timestamp.now()
         self.start_date.set_date(start_date)
         self.end_date.set_date(end_date)
 
@@ -80,11 +108,10 @@ class Charts_GUI(tk.Toplevel):
             self.frame_chart.destroy()
         self.frame_chart = Frame_Chart(self.frame_chart_holder, self.symbols, self.sector)
         self.frame_chart.pack(expand=True, fill='both')
-        if self.auto_update_date.get():
-            self.set_dates()
         self.plot_compare()
 
     def get_charts(self):
+        self.set_dates()
         start_date = self.start_date.get_date()
         end_date = self.end_date.get_date()
         return self.charts[self.symbols].ffill().dropna().loc[start_date:end_date].copy()
@@ -115,8 +142,6 @@ class Charts_GUI(tk.Toplevel):
 
     def symbols_changed(self, symbols):
         self.symbols = symbols
-        if self.auto_update_date.get():
-            self.set_dates()
         self.plot_compare()
 
     def sector_changed(self, sector):
@@ -125,6 +150,7 @@ class Charts_GUI(tk.Toplevel):
         self.refresh_frame_chart()
     
     def date_changed(self, event):
+        self.auto_date_range.set('no auto date')
         self.plot_compare()
 
     def set_charts(self, symbols):
