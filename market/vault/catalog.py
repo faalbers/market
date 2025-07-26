@@ -254,6 +254,8 @@ class Catalog():
             YahooF_Chart: {
                 'chart': [
                     ['Adj Close', 'price'],
+                    ['High', 'high'],
+                    ['Low', 'low'],
                     ['Volume', 'volume'],
                     ['Dividends', 'dividends'],
                     # ['Stock Splits', 'stock_splits'],

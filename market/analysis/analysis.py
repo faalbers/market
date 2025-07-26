@@ -7,6 +7,7 @@ from pprint import pp
 from ..utils import storage
 from ..database import Database
 from datetime import datetime
+import talib as ta
 
 class Analysis():
 
@@ -79,14 +80,16 @@ class Analysis():
                 column_name = 'operating_profit_margin_ttm_%'
                 trailing[column_name] = np.nan
                 is_revenue = (trailing['revenue_total'] > 0.0) & (trailing['income_operating'] <= trailing['revenue_total'])
-                trailing.loc[is_revenue, column_name] = \
-                    (trailing.loc[is_revenue, 'income_operating'] / trailing.loc[is_revenue, 'revenue_total']) * 100
+                if is_revenue.any():
+                    trailing.loc[is_revenue, column_name] = \
+                        (trailing.loc[is_revenue, 'income_operating'] / trailing.loc[is_revenue, 'revenue_total']) * 100
             if 'income_net' in trailing.columns and 'revenue_total' in trailing.columns:
                 column_name = 'net_profit_margin_ttm_%'
                 trailing[column_name] = np.nan
                 is_revenue = (trailing['revenue_total'] > 0.0) & (trailing['income_net'] <= trailing['revenue_total'])
-                trailing.loc[is_revenue, column_name] = \
-                    (trailing.loc[is_revenue, 'income_net'] / trailing.loc[is_revenue, 'revenue_total']) * 100
+                if is_revenue.any():
+                    trailing.loc[is_revenue, column_name] = \
+                        (trailing.loc[is_revenue, 'income_net'] / trailing.loc[is_revenue, 'revenue_total']) * 100
 
             columns_keep = [
                 'eps',
@@ -142,7 +145,44 @@ class Analysis():
                 if inactive_days > 30: continue
 
             chart_data.loc[symbol, 'active'] = True
+
+            # get mark minervini classifications
+            current_price = chart.iloc[-1]['price']
+
+            conditions = []
             
+            sma_50 = ta.SMA(chart['price'], timeperiod=50)
+            
+            for period in [150, 200]:
+                if chart.shape[0] >= period:
+                    sma = ta.SMA(chart['price'], timeperiod=period)
+                    conditions.append(current_price > sma.iloc[-1]) # Current Price Above the period Moving Average
+                    conditions.append(sma_50.iloc[-1] > sma.iloc[-1]) # 50-Day Moving Average Above the period Moving Average
+                    if chart.shape[0] >= (period + 20):
+                        slope = np.polyfit(range(20), sma.iloc[-20:].values, 1)[0]
+                        conditions.append(slope > 0.0,) # period Moving Average Increasing during last month
+                    else:
+                        conditions.append(False)
+                else:
+                    conditions += [False, False, False]
+
+            if chart.shape[0] >= 52*5:
+                low_52_week = chart.iloc[-(52*5)]['low'].min()
+                conditions.append(current_price > (low_52_week * 1.3)) # Current Price Above 52-Week Low plus 30%
+                high_52_week = chart.iloc[-(52*5)]['high'].max()
+                conditions.append(current_price > (high_52_week * 0.75)) # Current Price Above 52-Week High minus 25%
+            else:
+                conditions += [False, False]
+
+            if chart.shape[0] >= 14:
+                rsi = ta.RSI(chart['price'], timeperiod=14).iloc[-1]
+                conditions.append(rsi > 70) # RSI Above 70
+            else:
+                conditions.append(False)
+
+            minervini_score_percent = (np.array([float(x) for x in conditions]) / len(conditions)).sum() * 100.0
+            chart_data.loc[symbol, 'minervini_score_%'] = minervini_score_percent
+
             # get dividends data
             if not 'dividends' in chart.columns: continue
             
@@ -262,14 +302,16 @@ class Analysis():
                 column_name = 'operating_profit_margin_%s_%%' % (period_single)
                 period_symbol[column_name] = np.nan
                 is_revenue = (period_symbol['revenue_total'] > 0.0) & (period_symbol['income_operating'] <= period_symbol['revenue_total'])
-                period_symbol.loc[is_revenue, column_name] = \
-                    (period_symbol.loc[is_revenue, 'income_operating'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
+                if is_revenue.any():
+                    period_symbol.loc[is_revenue, column_name] = \
+                        (period_symbol.loc[is_revenue, 'income_operating'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
             if 'income_net' in period_symbol.columns and 'revenue_total' in period_symbol.columns:
                 column_name = 'net_profit_margin_%s_%%' % (period_single)
                 period_symbol[column_name] = np.nan
                 is_revenue = (period_symbol['revenue_total'] > 0.0) & (period_symbol['income_net'] <= period_symbol['revenue_total'])
-                period_symbol.loc[is_revenue, column_name] = \
-                    (period_symbol.loc[is_revenue, 'income_net'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
+                if is_revenue.any():
+                    period_symbol.loc[is_revenue, column_name] = \
+                        (period_symbol.loc[is_revenue, 'income_net'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
             if 'free_cash_flow' in period_symbol.columns:
                 period_symbol = period_symbol.rename(columns={'free_cash_flow': 'free_cash_flow_%s' % (period_single)})
 
