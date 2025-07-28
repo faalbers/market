@@ -239,7 +239,7 @@ class Database():
         table_columns = [x[1] for x in table_info]
         for column_name, dtype in dtypes.items():
             if column_name in table_columns: continue
-            cursor.execute("ALTER TABLE %s ADD COLUMN [%s] %s" % (table_name, column_name, dtype))
+            cursor.execute("ALTER TABLE '%s' ADD COLUMN [%s] %s" % (table_name, column_name, dtype))
 
         if index:
             # handle dataframe with index
