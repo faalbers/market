@@ -169,18 +169,18 @@ class Tickers():
         data = self.__symbols.merge(data, how='left', left_index=True, right_index=True)
         return data
     
-    def get_charts(self, start_date=None, end_date=None, update=False, forced=False):
-        data = self.vault.get_data('chart', key_values=self.__symbols.index.to_list(), update=update, forced=forced)['chart']
+    def get_vault_charts(self, start_date=None, end_date=None, update=False, forced=False):
+        data = self.vault.get_data('chart', key_values=self.__symbols.index.to_list(), update=update, forced=forced)
 
         if start_date or end_date:
-            for symbol in data.keys():
+            for symbol in data['chart'].keys():
                 if start_date:
-                    data[symbol] = data[symbol].loc[start_date:]
+                    data['chart'][symbol] = data['chart'][symbol].loc[start_date:]
                 if end_date:
-                    data[symbol] = data[symbol].loc[:end_date]
+                    data['chart'][symbol] = data['chart'][symbol].loc[:end_date]
         return data
 
-    def get_fundamentals(self, update=False, forced=False):
+    def get_vault_fundamentals(self, update=False, forced=False):
         data = self.vault.get_data('fundamental', key_values=self.__symbols.index.to_list(), update=update, forced=forced)
         return data
     
@@ -188,7 +188,7 @@ class Tickers():
         data = self.vault.get_data('news', key_values=self.__symbols.index.to_list(), update=update, forced=forced)
         return data
     
-    def get_analysis(self, update=False, forced=False):
+    def get_vault_analysis(self, update=False, forced=False):
         data = self.vault.get_data('analysis', key_values=self.__symbols.index.to_list(), update=update, forced=forced)
         return data
 
