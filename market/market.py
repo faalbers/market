@@ -75,11 +75,11 @@ class Market():
     def get_params(self, catalog):
         return self.vault.get_params(catalog)
 
-    def get_analysis(self, symbols=[], update=False, forced=False, cache_update=False):
-        return Analysis(symbols, update=update, forced=forced, cache_update=cache_update)
+    def get_analysis(self, symbols=[]):
+        return Analysis(symbols)
     
-    def analysis_gui(self, symbols=[], update=False, forced=False, cache_update=False):
-        return Analysis_GUI(symbols, update=update, forced=forced, cache_update=cache_update)
+    def analysis_gui(self, symbols=[]):
+        return Analysis_GUI(symbols)
 
     def get_quicken(self, qif_file):
         return Quicken(qif_file)
