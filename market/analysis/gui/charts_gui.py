@@ -9,7 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class Charts_GUI(tk.Toplevel):
     def __init__(self, parent, symbols):
         super().__init__(parent)
-        self.analysis = parent.analysis
+        self.analysis_data = parent.analysis_data
         self.set_charts(symbols)
         self.set_charts_sectors(symbols)
         self.symbols = symbols
@@ -157,19 +157,19 @@ class Charts_GUI(tk.Toplevel):
         # get compare charts
         tickers = Tickers(symbols)
         # charts = tickers.get_charts(update=update, forced=forced)
-        symbol_charts = tickers.get_charts()
+        symbol_charts = tickers.get_vault_charts()['chart']
 
         # create compare and compare sector
         self.charts = pd.DataFrame()
         for symbol, chart in symbol_charts.items():
             # add compare
-            adj_close = chart['Adj Close']
+            adj_close = chart['price']
             self.charts = self.charts.merge(adj_close, how='outer', left_index=True, right_index=True)
-            self.charts = self.charts.rename(columns={'Adj Close': symbol})
+            self.charts = self.charts.rename(columns={'price': symbol})
 
     def set_charts_sectors(self, symbols):
         # get sector charts
-        sectors_found = self.analysis.loc[symbols, 'sector'].dropna().unique()
+        sectors_found = self.analysis_data.loc[symbols, 'sector'].dropna().unique()
         sectors = {
             'XLV': 'Healthcare',
             'XLB': 'Basic Materials',
@@ -185,7 +185,7 @@ class Charts_GUI(tk.Toplevel):
             # 'SPY': 'S&P500',
         }
         sector_tickers = Tickers(list(sectors.keys()))
-        sector_charts = sector_tickers.get_charts()
+        sector_charts = sector_tickers.get_vault_charts()['chart']
         self.charts_sectors = pd.DataFrame()
         self.sector_symbols = {}
         for sector_symbol, sector in sectors.items():
@@ -193,10 +193,10 @@ class Charts_GUI(tk.Toplevel):
             self.sector_symbols[sector] = []
             if not sector_symbol in sector_charts:
                 raise Exception('sector ticker not found: %s' % sector_symbol)
-            self.charts_sectors = self.charts_sectors.merge(sector_charts[sector_symbol]['Adj Close'], how='outer', left_index=True, right_index=True)
-            self.charts_sectors = self.charts_sectors.rename(columns={'Adj Close': sector})
+            self.charts_sectors = self.charts_sectors.merge(sector_charts[sector_symbol]['price'], how='outer', left_index=True, right_index=True)
+            self.charts_sectors = self.charts_sectors.rename(columns={'price': sector})
         
-        for symbol, sector in self.analysis.loc[symbols]['sector'].dropna().items():
+        for symbol, sector in self.analysis_data.loc[symbols]['sector'].dropna().items():
             self.sector_symbols[sector].append(symbol)
         self.sector_symbols['N/A'] = symbols
 

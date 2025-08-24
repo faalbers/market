@@ -12,8 +12,13 @@ class Analysis_Selection_GUI(tk.Toplevel):
     def __init__(self, parent, symbols, columns):
         super().__init__(parent)
         self.analysis = parent.analysis
+        self.analysis_data = parent.analysis_data
         self.symbols = symbols
-        self.data = self.analysis.loc[self.symbols].reset_index() # this also creates a copy
+        self.data = self.analysis_data.loc[self.symbols].reset_index() # this also creates a copy
+        # sort columns
+        start_columns = self.data.columns.tolist()[:6]
+        end_columns = sorted(self.data.columns.tolist()[6:])
+        self.data = self.data[start_columns + end_columns]
 
         self.title('Market Analysis Selection (%s)' % len(symbols))
 

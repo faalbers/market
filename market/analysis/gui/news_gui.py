@@ -9,7 +9,7 @@ import webbrowser
 class News_GUI(tk.Toplevel):
     def __init__(self, parent, symbols):
         super().__init__(parent)
-        self.analysis = parent.analysis
+        self.analysis_data = parent.analysis_data
         self.symbols = symbols
         self.set_news(symbols)
 

@@ -7,40 +7,58 @@ from pprint import pp
 from ..utils import storage
 from ..database import Database
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 import talib as ta
 
 class Analysis():
 
-    def __init__(self, symbols=[], update=False, forced=False, cache_update=False):
+    def __init__(self, symbols=[]):
+        self.tickers = Tickers(symbols)
         self.db = Database('analysis')
         self.vault = Vault()
-        self.__get_data(symbols, update, forced, cache_update)
+        self.__get_data()
         # self.viz = Viz()
         # self.benchmarks = Tickers(['SPY', 'QQQ'])
 
     def get_data(self, active_only=True):
         if active_only:
-            return self.data[self.data['active'] == True].copy()
+            data = self.data[self.data['active'] == True].copy()
         else:
-            return self.data.copy()
-    
-    def __cache_update(self, symbols, update, forced):
+            data = self.data.copy()
+        data.drop('active', axis=1, inplace=True)
+        return data
+
+    def __cache_update(self, symbols):
+        pd.options.display.float_format = '{:.2f}'.format
+        if len(symbols) == 0: return
         print('update cache %s symbols' % (len(symbols)))
-        tickers = Tickers(symbols)
-        if tickers.empty: return data
 
         # start data
+        tickers = Tickers(symbols)
         data = tickers.get_symbols_dataframe()
 
         # get analysis
         print('Get Analysis:')
-        analysis = tickers.get_analysis(update=update, forced=forced)
+        vault_analysis = tickers.get_vault_analysis()
         print('Get Analysis: done')
-        analysis['type'] = data['type']
+        vault_analysis['type'] = data['type']
 
         # merge info
         print('Info:')
-        info = analysis['info']
+        info = vault_analysis['info']
+
+        # add timestamp
+        timestamp = int(datetime.now().timestamp())
+        info['timestamp'] = timestamp
+
+        # name market cap
+        info['market_cap'] = info['market_cap'] / 1000000
+        info.loc[info['market_cap'] >= 250, 'market_cap_name'] = 'Small'
+        info.loc[info['market_cap'] >= 2000, 'market_cap_name'] = 'Mid'
+        info.loc[info['market_cap'] >= 10000, 'market_cap_name'] = 'Large'
+        info.loc[info['market_cap'] >= 200000, 'market_cap_name'] = 'Mega'
+        info.drop('market_cap', axis=1, inplace=True)
+        info.rename(columns={'market_cap_name': 'market_cap'}, inplace=True)
 
         # handle funds info
         if True:
@@ -48,75 +66,45 @@ class Analysis():
             info.loc[is_fund_overview, 'fund_category'] = info.loc[is_fund_overview, 'fund_overview'].apply(lambda x: x.get('categoryName'))
             info.loc[is_fund_overview, 'fund_family'] = info.loc[is_fund_overview, 'fund_overview'].apply(lambda x: x.get('family'))
             info = info.drop('fund_overview', axis=1)
-        
-        # handle growth estimates
-        if True:
-            is_growth_estimates = info['growth_estimates'].notna()
-            values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0q')).apply(lambda x: x.get('stockTrend'))*100
-            info.loc[is_growth_estimates, 'growth_trend_q_cur_%'] = values
-            values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1q')).apply(lambda x: x.get('stockTrend'))*100
-            info.loc[is_growth_estimates, 'growth_trend_q_next_%'] = values
-            values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0y')).apply(lambda x: x.get('stockTrend'))*100
-            info.loc[is_growth_estimates, 'growth_trend_y_cur_%'] = values
-            values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1y')).apply(lambda x: x.get('stockTrend'))*100
-            info.loc[is_growth_estimates, 'growth_trend_y_next_%'] = values
-            info = info.drop('growth_estimates', axis=1)
 
         data = data.merge(info, how='left', left_index=True, right_index=True)
-        
+
         # fix 'infinity' from info
         for column in data.columns[data.apply(lambda x: 'Infinity' in x.values)]:
             data.loc[data[column] == 'Infinity', column] = np.nan
 
-        # get charts data and valid anaylsis
-        if True:
-            chart_data = self.__get_chart_data(analysis)
-            data = data.merge(chart_data, how='left', left_index=True, right_index=True)
+        # get data derrived from charts
+        print('charts:')
+        active = self.get_active(vault_analysis)
+        data = data.merge(active, how='left', left_index=True, right_index=True)
+        minervini = self.get_minervini(vault_analysis)
+        data = data.merge(minervini, how='left', left_index=True, right_index=True)
+        dividends = self.get_dividend_yields(vault_analysis)
+        for period in ['yearly', 'ttm']:
+            name = 'dividends_'+period
+            trends = self.get_trends_percent(dividends[period], name=name)
+            data = data.merge(trends, how='left', left_index=True, right_index=True)
+        print('charts: done')
 
-        # get ttm fundamentals
-        if True:
-            trailing = analysis['trailing'].copy()
-            if 'income_operating' in trailing.columns and 'revenue_total' in trailing.columns:
-                column_name = 'operating_profit_margin_ttm_%'
-                trailing[column_name] = np.nan
-                is_revenue = (trailing['revenue_total'] > 0.0) & (trailing['income_operating'] <= trailing['revenue_total'])
-                if is_revenue.any():
-                    trailing.loc[is_revenue, column_name] = \
-                        (trailing.loc[is_revenue, 'income_operating'] / trailing.loc[is_revenue, 'revenue_total']) * 100
-            if 'income_net' in trailing.columns and 'revenue_total' in trailing.columns:
-                column_name = 'net_profit_margin_ttm_%'
-                trailing[column_name] = np.nan
-                is_revenue = (trailing['revenue_total'] > 0.0) & (trailing['income_net'] <= trailing['revenue_total'])
-                if is_revenue.any():
-                    trailing.loc[is_revenue, column_name] = \
-                        (trailing.loc[is_revenue, 'income_net'] / trailing.loc[is_revenue, 'revenue_total']) * 100
-
-            columns_keep = [
-                'eps',
-                'operating_profit_margin_ttm_%',
-                'net_profit_margin_ttm_%',
-            ]
-            columns = [c for c in trailing.columns if c in columns_keep]
-            trailing = trailing[columns]
-
-            columns_rename = {
-                'eps': 'eps_ttm_fundamental_$',
-            }
-            trailing = trailing.rename(columns=columns_rename)
-
-            data = data.merge(trailing, how='left', left_index=True, right_index=True)
-
-        # get periodic fundamentals
-        if True:
-            yearly = self.__get_fundamentals(analysis, 'yearly')
-            quarterly = self.__get_fundamentals(analysis, 'quarterly')
-            data = data.merge(yearly, how='left', left_index=True, right_index=True)
-            data = data.merge(quarterly, how='left', left_index=True, right_index=True)
-
-        # sort columns
-        columns_main = [c for c in ['name', 'type', 'sub_type', 'sector', 'industry'] if c in data.columns]
-        columns = columns_main + sorted([x for x in data.columns if x not in columns_main])
-        data = data[columns]
+        # get fundamentals
+        fundamentals = {}
+        print('fundamentals: yearly')
+        fundamentals['yearly'] = self.get_fundamentals(vault_analysis, 'yearly')
+        print('fundamentals: quarterly')
+        fundamentals['quarterly'] = self.get_fundamentals(vault_analysis, 'quarterly')
+        print('fundamentals: ttm')
+        fundamentals['ttm'] = self.get_fundamentals_ttm(vault_analysis).T
+        # merge trends
+        for period in ['yearly', 'quarterly']:
+            for param, trend_data in fundamentals[period].items():
+                name = param.replace(' ', '_')+'_'+period
+                trends = self.get_trends_percent(trend_data, name=name)
+                data = data.merge(trends, how='left', left_index=True, right_index=True)
+        # rename ttm parameters
+        rename = {c:(c.replace(' ', '_')+'_ttm') for c in fundamentals['ttm'].columns}
+        fundamentals['ttm'] = fundamentals['ttm'].rename(columns=rename)
+        data = data.merge(fundamentals['ttm'], how='left', left_index=True, right_index=True)
+        print('fundamentals: done')
 
         # infer al object columns
         data = data.infer_objects()
@@ -125,29 +113,110 @@ class Analysis():
         self.db.backup()
         self.db.table_write('analysis', data)
 
-        return data        
+    def get_trends_percent(self, data, name):
+        trends = []
+        for column in data.columns:
+            series = data[column].dropna()
+            if series.shape[0] == 0: continue
+            
+            trend_values = pd.Series(name=column)
+            trend_values[name] = series.iloc[-1]
+            last_date = series.index[-1]
+            if isinstance(last_date, pd.Timestamp):
+                trend_values['%s_end_year' % name] = last_date.year
+                trend_values['%s_end_month' % name] = last_date.month
+            elif last_date > 1900:
+                trend_values['%s_end_year' % name] = last_date
+            
+            if series.shape[0] >= 2:
+                count_range = range(series.shape[0])
+                slope, intercept = np.polyfit(count_range, series.values, 1)
+                std = (series - (count_range*slope + intercept)).std()
+                trend_values['%s_count' % name] = series.shape[0]
+                trend_values['%s_trend' % name] = slope
+                trend_values['%s_std' % name] = std
+            
+            trends.append(trend_values)
 
-    def __get_chart_data(self, analysis):
-        print('charts:')
-        chart_data = pd.DataFrame()
-
+        trends = pd.DataFrame(trends)
+        
+        return trends
+        
+    def get_active(self, vault_analysis):
+        active = pd.Series(name='active')
         now = pd.Timestamp.now()
-        for symbol, chart in analysis['chart'].items():
-            # find if stock is still active
-            chart_volume = chart[chart['volume'] > 0]
-            chart_data.loc[symbol, 'active'] = False
-            symbol_type = analysis['type'].loc[symbol]
+        for symbol, chart in vault_analysis['chart'].items():
+            active[symbol] = False
+            symbol_type = vault_analysis['type'].loc[symbol]
             if symbol_type in ['EQUITY', 'ETF']:
-                # only check volume on EQUITY and ETF stocks
-                # Mutual funds and indices typically don't have volume data displayed on their charts
+                chart_volume = chart[chart['volume'] > 0]
                 if chart_volume.empty: continue
                 inactive_days = (now - (chart_volume.index[-1])).days
                 if inactive_days > 30: continue
+            active[symbol] = True
 
-            chart_data.loc[symbol, 'active'] = True
+        return active
+
+    def get_dividend_yields(self, vault_analysis, symbols=[]):
+        dividend_yields = {
+            'all': [],
+        }
+        if len(symbols) == 0:
+            symbols = sorted(vault_analysis['chart'])
+        else:
+            symbols = sorted(set(symbols).intersection(set(vault_analysis['chart'])))
+        for symbol in symbols:
+            # prepare dataframe
+            chart = vault_analysis['chart'][symbol].copy()
+            if 'dividends' in chart.columns:
+                is_dividend = chart['dividends'] > 0.0
+                if is_dividend.any():
+                    dividends = chart[is_dividend]['dividends']
+                    if 'stock_splits' in chart.columns:
+                        is_stock_split = chart['stock_splits'] > 0.0
+                        if is_stock_split.any():
+                            chart['dividend_div'] = 1.0
+                            chart.loc[is_stock_split, 'dividend_div'] = chart.loc[is_stock_split, 'stock_splits']
+                            chart['dividend_div'] = chart['dividend_div'].iloc[::-1].cumprod().iloc[::-1]
+                            chart['dividends'] = chart['dividends'] / chart['dividend_div']
+                            dividends = chart[is_dividend]['dividends']
+                    dividends.name = symbol
+                    dividend_yields['all'].append((dividends / float(chart['price'].iloc[-1])) * 100)
+
+        # prepare all dividends
+        dividend_yields['all'] = pd.DataFrame(dividend_yields['all']).T
+        dividend_yields['all'].sort_index(inplace=True)
+
+        if not dividend_yields['all'].empty:
+            now = pd.Timestamp.now()
+            last_year = now.year - 1
+
+            # create yearly
+            dividend_yields['yearly'] = dividend_yields['all'].groupby(dividend_yields['all'].index.year).sum().loc[:last_year]
+            dividend_yields['yearly'] = dividend_yields['yearly'].iloc[1:]
+            dividend_yields['yearly'].replace(0, np.nan, inplace=True)
+            
+            # create ttm
+            dividend_yields['ttm'] = dividend_yields['all'].groupby(dividend_yields['all'].index.map(lambda x: relativedelta(now, x).years)).sum()
+            dividend_yields['ttm'].sort_index(ascending=False, inplace=True)
+            dividend_yields['ttm'] = dividend_yields['ttm'].iloc[1:]
+            dividend_yields['ttm'].replace(0, np.nan, inplace=True)
+        else:
+            dividend_yields['yearly'] = pd.DataFrame()
+            dividend_yields['ttm'] = pd.DataFrame()
+        
+        return dividend_yields
+
+    def get_minervini(self, vault_analysis, symbols=[]):
+        chart_data = pd.DataFrame()
+        for symbol, chart in vault_analysis['chart'].items():
+            # there are some price values that are strings because of Infinity
+            chart['price'] = chart['price'].astype(float, errors='ignore')
 
             # get mark minervini classifications
-            current_price = chart.iloc[-1]['price']
+            # https://www.chartmill.com/documentation/stock-screener/technical-analysis-trading-strategies/496-Mark-Minervini-Trend-Template-A-Step-by-Step-Guide-for-Beginners
+            current_price = chart['price'].dropna().iloc[-1]
+            chart_data.loc[symbol, 'price'] = current_price
 
             conditions = []
             
@@ -181,242 +250,125 @@ class Analysis():
                 conditions.append(False)
 
             minervini_score_percent = (np.array([float(x) for x in conditions]) / len(conditions)).sum() * 100.0
-            chart_data.loc[symbol, 'minervini_score_%'] = minervini_score_percent
+            chart_data.loc[symbol, 'minervini_score'] = minervini_score_percent
 
-            # get dividends data
-            if not 'dividends' in chart.columns: continue
-            
-            # there are some price values that are strings because of Infinity
-            chart['price'] = chart['price'].astype(float, errors='ignore')
-            chart_dividends = chart[chart['dividends'] > 0]
-            if chart_dividends.empty: continue
-
-            # yearly dividends data
-
-            # get range between first full year and last full year
-            first_year = chart_dividends.index[0].year + 1
-            last_year = datetime.now().year-1
-            chart_dividends_yearly = chart_dividends[(chart_dividends.index.year >= first_year) & (chart_dividends.index.year <= last_year)]
-            
-            # find yearly data
-            dividends = chart_dividends_yearly['dividends'].groupby(chart_dividends_yearly.index.year)
-            price = chart_dividends_yearly['price'].groupby(chart_dividends_yearly.index.year)
-            dividend_count_yearly = dividends.size()
-            dividend_rate_yearly = dividends.sum()
-            dividend_price_yearly = price.mean()
-            years_count = dividend_count_yearly.shape[0]
-            chart_data.loc[symbol, 'dividend_years'] = years_count
-            count_per_year = dividend_count_yearly.mean()
-            chart_data.loc[symbol, 'dividend_count_yearly'] = count_per_year
-
-            # get trends and stds for yearly data
-            if years_count > 1:
-                # calculate polyfit trend
-                slope, start = np.polyfit(range(years_count), dividend_rate_yearly.values, 1)
-                trend = range(years_count)*slope + start
-
-                # get trend end value
-                trend_end_value = trend[-1]
-
-                # get trend percentage from trend end value
-                dividend_rate_yearly_trend_percent = (slope / trend_end_value) * 100
-                chart_data.loc[symbol, 'dividend_rate_yearly_%_trend'] = dividend_rate_yearly_trend_percent
-                
-                # get standard deviation from zero flatline
-                dividend_rate_yearly_std = (dividend_rate_yearly - trend).std()
-
-                # get std deviation percentage from trend end value
-                dividend_rate_yearly_std_percent = (dividend_rate_yearly_std / trend_end_value ) * 100
-                chart_data.loc[symbol, 'dividend_rate_yearly_std_%'] = dividend_rate_yearly_std_percent
-
-            else:
-                chart_data.loc[symbol, 'dividend_rate_yearly_%_trend'] = 0.0
-                chart_data.loc[symbol, 'dividend_rate_yearly_std_%'] = 0.0
-
-            # get last year data
-            if last_year in dividend_rate_yearly.index:
-                dividend_rate_last_year = dividend_rate_yearly.loc[last_year]
-                # chart_data.loc[symbol, 'dividend_rate_last_year_$'] = dividend_rate_last_year
-                dividend_yield_last_year_percent = (dividend_rate_last_year / dividend_price_yearly.loc[last_year]) * 100
-                chart_data.loc[symbol, 'dividend_yield_last_year_%'] = dividend_yield_last_year_percent
-            
-            # get ttm data
-            dividends_ttm = chart_dividends.loc[chart_dividends.index > (pd.Timestamp.now() - pd.DateOffset(months=12))]['dividends']
-            if not dividends_ttm.empty:
-                dividend_count_ttm = dividends_ttm.shape[0]
-                dividend_rate_ttm = dividends_ttm.sum()
-                # chart_data.loc[symbol, 'dividend_rate_ttm_$'] = dividend_rate_ttm
-                dividends_yield_ttm_percent = (dividend_rate_ttm / chart['price'].iloc[-1]) * 100
-                chart_data.loc[symbol, 'dividend_yield_ttm_%'] = dividends_yield_ttm_percent
-                chart_data.loc[symbol, 'dividend_count_ttm'] = dividend_count_ttm
-                
-                # get ttm trend
-                if dividend_count_ttm > 1:
-                    # calculate polyfit trend
-                    slope, start = np.polyfit(range(dividend_count_ttm), dividends_ttm.values, 1)
-                    trend = range(dividend_count_ttm)*slope + start
-
-                    # get trend end value
-                    trend_end_value = trend[-1]
-
-                    # get trend percentage from trend end value
-                    dividend_rate_ttm_trend_percent = ((trend_end_value - start) / trend_end_value) * 100
-                    chart_data.loc[symbol, 'dividend_rate_ttm_%_trend'] = dividend_rate_ttm_trend_percent
-                    
-                    # get standard deviation from zero flatline
-                    dividend_rate_ttm_std = (dividends_ttm - trend).std()
-
-                    # get std deviation percentage from trend end value
-                    dividend_rate_ttm_std_percent = (dividend_rate_ttm_std / trend_end_value ) * 100
-                    chart_data.loc[symbol, 'dividend_rate_ttm_std_%'] = dividend_rate_ttm_std_percent
-
-
-                else:
-                    chart_data.loc[symbol, 'dividend_rate_ttm_%_trend'] = 0.0
-                    chart_data.loc[symbol, 'dividend_rate_ttm_std_%'] = 0.0
-
-                # if last_year in dividend_rate_yearly.index:
-                #     dividends_rate_ttm_trend_percent = ((dividend_rate_ttm / dividend_rate_last_year) * 100) - 100
-                #     chart_data.loc[symbol, 'dividends_rate_ttm_trend_%'] = dividends_rate_ttm_trend_percent
         return chart_data
 
-    def __get_fundamentals(self, analysis, period):
-        print('fundamentals: %s' % period)
-        period_single = period.rstrip('ly')
-        df_period = pd.DataFrame()
-        this_year = datetime.now().year
-        for symbol, period_symbol in analysis[period].items():
-            period_symbol = period_symbol.dropna(how='all').copy()
-            if period_symbol.shape[0] == 0: continue
-            if (this_year -period_symbol.index[-1].year) > 1: continue
-            period_count = period_symbol.shape[0]
 
-            # add metrics
-            if 'debt_current' in period_symbol.columns and 'cash' in period_symbol.columns:
-                column_name = 'cash_position_%s' % (period_single)
-                period_symbol[column_name] = period_symbol['debt_current'] / period_symbol['cash']
-            if 'assets_current' in period_symbol.columns and 'liabilities_current' in period_symbol.columns:
-                column_name = 'liquidity_%s' % (period_single)
-                period_symbol[column_name] = period_symbol['assets_current'] / period_symbol['liabilities_current']
-            if 'income_operating' in period_symbol.columns and 'revenue_total' in period_symbol.columns:
-                column_name = 'operating_profit_margin_%s_%%' % (period_single)
-                period_symbol[column_name] = np.nan
-                is_revenue = (period_symbol['revenue_total'] > 0.0) & (period_symbol['income_operating'] <= period_symbol['revenue_total'])
-                if is_revenue.any():
-                    period_symbol.loc[is_revenue, column_name] = \
-                        (period_symbol.loc[is_revenue, 'income_operating'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
-            if 'income_net' in period_symbol.columns and 'revenue_total' in period_symbol.columns:
-                column_name = 'net_profit_margin_%s_%%' % (period_single)
-                period_symbol[column_name] = np.nan
-                is_revenue = (period_symbol['revenue_total'] > 0.0) & (period_symbol['income_net'] <= period_symbol['revenue_total'])
-                if is_revenue.any():
-                    period_symbol.loc[is_revenue, column_name] = \
-                        (period_symbol.loc[is_revenue, 'income_net'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
-            if 'free_cash_flow' in period_symbol.columns:
-                period_symbol = period_symbol.rename(columns={'free_cash_flow': 'free_cash_flow_%s' % (period_single)})
-
-            # calculate trends and standard deviation
-            if period_count > 1:
-                # prepare period trends calculation
-                period_values = period_symbol.dropna(axis=1, how='all').copy()
-
-                # to avoid errors with polyfit
-                period_values = period_values.ffill().bfill()
-                period_values = period_values.reset_index(drop=True)
-
-                # get slope and start
-                period_values_polyfit = period_values.apply(lambda x: np.polyfit(range(period_count), x, 1))
-                period_trends_line = period_values_polyfit.apply(lambda x: (x[0]*range(period_count) + x[1]))
-
-                # get trends
-                period_trends = period_values_polyfit.iloc[0]
-                period_trends.name = symbol
-                period_trends = pd.DataFrame(period_trends).T
-                rename_trends = {c: '%s_trend' % (c) for c in period_trends.columns}
-                period_trends = period_trends.rename(columns=rename_trends)
-
-                # get standard deviation from zero flatline
-                period_std = (period_values - period_trends_line).std()
-                period_std.name = symbol
-                period_std = pd.DataFrame(period_std).T
-                rename_std = {c: '%s_std' % (c) for c in period_std.columns}
-                period_std = period_std.rename(columns=rename_std)
-
-                # merge them together
-                period_trends = period_trends.merge(period_std, how='left', left_index=True, right_index=True)
-
-            # last year entries
-            period_symbol = period_symbol.tail(1).copy()
-            period_symbol.index = [symbol]
-            period_symbol.index.name = 'symbol'
-
-            if period_count > 1:
-                period_symbol = period_symbol.merge(period_trends, how='left', left_index=True, right_index=True)
-            period_symbol = period_symbol.dropna(axis=1)
-            
-            if df_period.empty:
-                df_period = period_symbol
-            elif not period_symbol.empty:
-                df_period = pd.concat([df_period,  period_symbol])
-
-        columns_keep = [
-            'eps',
-            'eps_trend',
-            'eps_std',
-            'cash_position_%s' % (period_single),
-            'cash_position_%s_trend' % (period_single),
-            'cash_position_%s_std' % (period_single),
-            'liquidity_%s' % (period_single),
-            'liquidity_%s_trend' % (period_single),
-            'liquidity_%s_std' % (period_single),
-            'operating_profit_margin_%s_%%' % (period_single),
-            'operating_profit_margin_%s_%%_trend' % (period_single),
-            'operating_profit_margin_%s_%%_std' % (period_single),
-            'net_profit_margin_%s_%%' % (period_single),
-            'net_profit_margin_%s_%%_trend' % (period_single),
-            'net_profit_margin_%s_%%_std' % (period_single),
-            'free_cash_flow_%s_trend' % (period_single),
-            'free_cash_flow_%s_std' % (period_single),
-        ]
-        columns = [c for c in df_period.columns if c in columns_keep]
-        df_period = df_period[columns]
-
-        columns_rename = {
-            'eps': 'eps_%s_$' % (period_single),
-            'eps_trend': 'eps_%s_$_trend' % (period_single),
-            'eps_std': 'eps_%s_$_std' % (period_single),
-        }
-        df_period = df_period.rename(columns=columns_rename)
-       
-        return df_period
-
-    def __cache_get(self, symbols, update, forced):
+    def get_fundamentals_ttm(self, vault_analysis, symbols=[]):
         if len(symbols) == 0:
-            symbols = Tickers().get_symbols()
-        data =  self.db.table_read('analysis', keys=symbols)
-        not_found = sorted(set(symbols).difference(set(data.index)))
-        if len(not_found) > 0:
-            cached = self.__cache_update(not_found, update, forced)
-            if data.empty:
-                data = cached
-            elif not cached.empty:
-                data = pd.concat([data, cached])
-            data.sort_index(inplace=True)
+            trailing = vault_analysis['trailing'].copy()
+        else:
+            trailing = vault_analysis['trailing'][vault_analysis['trailing'].index.isin(symbols)].copy()
+        
+        data = pd.DataFrame()
+        if 'current_liabilities' in trailing.columns:
+            if 'current_assets' in trailing.columns:
+                data['current ratio'] = (trailing['current_assets'] / trailing['current_liabilities']) * 100
+            if 'cash_and_cash_equivalents' in trailing.columns:
+                data['cash ratio'] = (trailing['cash_and_cash_equivalents'] / trailing['current_liabilities']) * 100.0
+        if 'total_revenue' in trailing.columns:
+            if 'gross_profit' in trailing.columns:
+                data['gross profit margin'] = (trailing['gross_profit'] / trailing['total_revenue']) * 100
+            if 'operating_income' in trailing.columns:
+                data['operating profit margin'] = (trailing['operating_income'] / trailing['total_revenue']) * 100
+            if 'pretax_income' in trailing.columns:
+                data['profit margin'] = (trailing['pretax_income'] / trailing['total_revenue']) * 100
+            if 'net_income' in trailing.columns:
+                data['net profit margin'] = (trailing['net_income'] / trailing['total_revenue']) * 100
+
+        # post fix data
+        data = data.T
+        data = data.infer_objects()
+        # values with inf had nan values as deviders
+        data = data.replace([np.inf, -np.inf], np.nan)
+        # drop symbols and dates where all values are nan
+        data.dropna(axis=1, how='all', inplace=True)
+        
+        return data
+
+    def get_fundamentals(self, vault_analysis, period, symbols=[]):
+        # prepare dataframes
+        data = {
+            'current ratio': [],
+            'cash ratio': [],
+            'gross profit margin': [],
+            'operating profit margin': [],
+            'profit margin': [],
+            'net profit margin': [],
+        }
+
+        # go through each symbol's dataframe
+        if len(symbols) == 0:
+            symbols = sorted(vault_analysis[period])
+        else:
+            symbols = sorted(set(symbols).intersection(set(vault_analysis[period])))
+        for symbol in symbols:
+            # prepare dataframe
+            symbol_period = vault_analysis[period][symbol].copy()
+            symbol_period.dropna(axis=0, how='all', inplace=True)
+            if period == 'yearly':
+                symbol_period.index = symbol_period.index.year
+            symbol_period = symbol_period.groupby(symbol_period.index).last() # some have more then one results in a period, strangely
+
+            # calculate ratios as Series
+            def add_values(param, symbol, values):
+                values.name = symbol
+                data[param].append(values)
+            if 'current_liabilities' in symbol_period.columns:
+                if 'current_assets' in symbol_period.columns:
+                    add_values('current ratio', symbol, (symbol_period['current_assets'] / symbol_period['current_liabilities']) * 100)
+                if 'cash_and_cash_equivalents' in symbol_period.columns:
+                    add_values('cash ratio', symbol, (symbol_period['cash_and_cash_equivalents'] / symbol_period['current_liabilities']) * 100.0)
+            if 'total_revenue' in symbol_period.columns:
+                if 'gross_profit' in symbol_period.columns:
+                    add_values('gross profit margin', symbol, (symbol_period['gross_profit'] / symbol_period['total_revenue']) * 100)
+                if 'operating_income' in symbol_period.columns:
+                    add_values('operating profit margin', symbol, (symbol_period['operating_income'] / symbol_period['total_revenue']) * 100)
+                if 'pretax_income' in symbol_period.columns:
+                    add_values('profit margin', symbol, (symbol_period['pretax_income'] / symbol_period['total_revenue']) * 100)
+                if 'net_income' in symbol_period.columns:
+                    add_values('net profit margin', symbol, (symbol_period['net_income'] / symbol_period['total_revenue']) * 100)
+        
+        # create dataframe pre parameter
+        for parameter, series in data.items():
+            data[parameter] = pd.DataFrame(series).T
+            # values with inf had nan values as deviders
+            data[parameter] = data[parameter].replace([np.inf, -np.inf], np.nan)
+            # drop symbols and dates where all values are nan
+            data[parameter].dropna(axis=1, how='all', inplace=True)
+            # sort index
+            data[parameter].sort_index(inplace=True)
 
         return data
     
-    def __get_data(self, symbols, update, forced, cache_update=False):
-        # check if database needs to be cached
-        if update: cache_update = True
-        # TODO Needs status_db check to do it correctly
+    def __get_data(self):
+        symbols = self.tickers.get_symbols()
+        # get newest analysis db timestamps
         analysis_timestamps = self.vault.get_db_timestamps('analysis')
+        analysis_timestamp = 0
         for db_name, db_timestamps in analysis_timestamps.items():
-            if db_timestamps > self.db.timestamp: cache_update = True
-
-        if cache_update:
-            self.data = self.__cache_update(symbols, update, forced)
+            if db_timestamps > analysis_timestamp: analysis_timestamp = db_timestamps
+        cache_timestamps =  self.db.table_read('analysis', keys=symbols, columns=['timestamp'])
+        if cache_timestamps.empty:
+            self.__cache_update(symbols)
         else:
-            self.data = self.__cache_get(symbols, update, forced)
-
-        return
+            cache_symbols = set(symbols).difference(set(cache_timestamps.index))
+            cache_symbols.update(cache_timestamps[cache_timestamps['timestamp'] < analysis_timestamp].index)
+            cache_symbols = sorted(cache_symbols)
+            self.__cache_update(cache_symbols)
         
+        self.data = self.db.table_read('analysis', keys=symbols)
+        self.data.drop('timestamp', axis=1, inplace=True)
+
+    # useful ?
+    # is_growth_estimates = info['growth_estimates'].notna()
+    # values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0q')).apply(lambda x: x.get('stockTrend'))*100
+    # info.loc[is_growth_estimates, 'growth_trend_q_cur_%'] = values
+    # values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1q')).apply(lambda x: x.get('stockTrend'))*100
+    # info.loc[is_growth_estimates, 'growth_trend_q_next_%'] = values
+    # values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0y')).apply(lambda x: x.get('stockTrend'))*100
+    # info.loc[is_growth_estimates, 'growth_trend_y_cur_%'] = values
+    # values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1y')).apply(lambda x: x.get('stockTrend'))*100
+    # info.loc[is_growth_estimates, 'growth_trend_y_next_%'] = values
+    # info = info.drop('growth_estimates', axis=1)

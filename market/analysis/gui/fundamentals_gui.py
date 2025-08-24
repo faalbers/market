@@ -6,11 +6,14 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from pprint import pp
 import pandas as pd
 import numpy as np
+import talib as ta
+
 
 class Fundamentals_GUI(tk.Toplevel):
     def __init__(self, parent, symbols):
         super().__init__(parent)
         self.analysis = parent.analysis
+        self.analysis_data = parent.analysis_data
         self.set_fundamentals(symbols)
         self.symbols = symbols
 
@@ -24,14 +27,24 @@ class Fundamentals_GUI(tk.Toplevel):
         frame_bottom_options.pack(side='bottom', fill='x')
 
         data_type = [
-            'net profit margin',
+            'current ratio',
+            'cash ratio',
+            'gross profit margin',
             'operating profit margin',
-            'liquidity',
-            'cash position',
+            'profit margin',
+            'net profit margin',
         ]
         self.data_type = tk.StringVar()
         self.data_type.set(data_type[0])
         tk.OptionMenu(frame_bottom_options, self.data_type, *data_type, command=self.data_type_changed).pack(side='left')
+        
+        data_period = [
+            'yearly',
+            'quarterly',
+        ]
+        self.data_period = tk.StringVar()
+        self.data_period.set(data_period[0])
+        tk.OptionMenu(frame_bottom_options, self.data_period, *data_period, command=self.data_period_changed).pack(side='left')
 
         self.frame_fundamentals = None
         self.refresh_frame_fundamentals()
@@ -39,105 +52,42 @@ class Fundamentals_GUI(tk.Toplevel):
     def data_type_changed(self, data_type):
         self.plot_compare()
 
+    def data_period_changed(self, data_type):
+        self.plot_compare()
+
     def set_fundamentals(self, symbols):
-        # get compare charts
+        # get compare fundamentals
         tickers = Tickers(symbols)
-        symbol_fundamentals = tickers.get_fundamentals()
-
-        # get  trailing data
-        trailing = symbol_fundamentals['trailing'].copy()
-        trailing['net_profit_margin'] = np.nan
-        if 'income_net' in trailing.columns and 'revenue_total' in trailing.columns:
-            is_revenue = (trailing['revenue_total'] > 0.0) & (trailing['income_net'] <= trailing['revenue_total'])
-            trailing.loc[is_revenue, 'net_profit_margin'] = \
-                (trailing.loc[is_revenue, 'income_net'] / trailing.loc[is_revenue, 'revenue_total']) * 100
-        trailing['operating_profit_margin'] = np.nan
-        if 'income_operating' in trailing.columns and 'revenue_total' in trailing.columns:
-            is_revenue = (trailing['revenue_total'] > 0.0) & (trailing['income_operating'] <= trailing['revenue_total'])
-            trailing.loc[is_revenue, 'operating_profit_margin'] = \
-                (trailing.loc[is_revenue, 'income_operating'] / trailing.loc[is_revenue, 'revenue_total']) * 100
-
-        self.yearly = self.get_fundamentals(symbol_fundamentals, 'yearly')
-        self.quarterly = self.get_fundamentals(symbol_fundamentals, 'quarterly')
-
-        # add ttm to yearly
-        if not self.yearly['net_profit_margin'].empty:
-            self.yearly['net_profit_margin'].loc['ttm'] = trailing['net_profit_margin']
-        if not self.yearly['operating_profit_margin'].empty:
-            self.yearly['operating_profit_margin'].loc['ttm'] = trailing['operating_profit_margin']
-
-    def get_fundamentals(self, symbol_fundamentals, period):
-        print('fundamentals: %s' % period)
-        fundamentals = {
-            'net_profit_margin': pd.DataFrame(),
-            'operating_profit_margin': pd.DataFrame(),
-        }
-        for symbol, period_symbol in symbol_fundamentals[period].items():
-            if period_symbol.empty: continue
-            period_symbol = period_symbol.dropna(how='all').copy()
-
-            # add counts to index
-            # period_symbol = period_symbol.iloc[::-1]
-            if period == 'yearly':
-                period_symbol.index = period_symbol.index.year
-            elif period == 'quarterly':
-                period_symbol.index = ['q%s' % (period_symbol.shape[0] - q - 1) for q in range(period_symbol.shape[0])]
-            else: continue
-
-            # add net_profit_margin
-            period_symbol[symbol] = np.nan
-            if 'income_net' in period_symbol.columns and 'revenue_total' in period_symbol.columns:
-                is_revenue = (period_symbol['revenue_total'] > 0.0) & (period_symbol['income_net'] <= period_symbol['revenue_total'])
-                period_symbol.loc[is_revenue, symbol] = \
-                    (period_symbol.loc[is_revenue, 'income_net'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
-            fundamentals['net_profit_margin'] = fundamentals['net_profit_margin'].merge(period_symbol[symbol], how='outer', left_index=True, right_index=True)
-            
-            # add operating_profit_margin
-            period_symbol[symbol] = np.nan
-            if 'income_operating' in period_symbol.columns and 'revenue_total' in period_symbol.columns:
-                is_revenue = (period_symbol['revenue_total'] > 0.0) & (period_symbol['income_operating'] <= period_symbol['revenue_total'])
-                period_symbol.loc[is_revenue, symbol] = \
-                    (period_symbol.loc[is_revenue, 'income_operating'] / period_symbol.loc[is_revenue, 'revenue_total']) * 100
-            fundamentals['operating_profit_margin'] = fundamentals['operating_profit_margin'].merge(period_symbol[symbol], how='outer', left_index=True, right_index=True)
-
-        if period == 'quarterly':
-            fundamentals['net_profit_margin'] = fundamentals['net_profit_margin'].sort_index(ascending=False)
-            fundamentals['operating_profit_margin'] = fundamentals['operating_profit_margin'].sort_index(ascending=False)
-
-        return fundamentals
+        fundamentals = tickers.get_vault_fundamentals()
+        self.fundamentals = {}
+        self.fundamentals['yearly'] = self.analysis.get_fundamentals(fundamentals, 'yearly')
+        self.fundamentals['quarterly'] = self.analysis.get_fundamentals(fundamentals, 'quarterly')
+        fundamentals_ttm = self.analysis.get_fundamentals_ttm(fundamentals)
+        for parameter, data in self.fundamentals['yearly'].items():
+            if parameter in fundamentals_ttm.index:
+                data.loc['ttm'] = fundamentals_ttm.loc[parameter]
 
     def plot_compare(self):
-        if self.data_type.get() == 'net profit margin':
-            data = self.yearly['net_profit_margin']
-            symbols = [s for s in data.columns if s in self.symbols]
-            data = data[symbols]
-            y_label = 'Net Profit Margin %'
-        elif self.data_type.get() == 'operating profit margin':
-            data = self.yearly['operating_profit_margin']
-            symbols = [s for s in data.columns if s in self.symbols]
-            data = data[symbols]
-            y_label = 'Operating Profit Margin %'
-        else: return
-
+        data_type = self.data_type.get()
+        data_period = self.data_period.get()
+        data = self.fundamentals[data_period][data_type].copy()
+        if data_period == 'quarterly':
+            data.index = data.index.date
+        symbols = [s for s in data.columns if s in self.symbols]
+        data = data[symbols]
+        data.dropna(axis=0, how='all', inplace=True)
+        
         fig, ax = plt.subplots()
         if not data.empty:
             data.plot(ax=ax, kind='bar')
-            ax.set_ylabel(y_label)
+            ax.set_ylabel(data_type + ' %')
             ax.grid(True, linestyle='--', linewidth=0.5, color='gray')
-            # ax.bar(dividends.index, dividends, color='green', alpha=0.5, width=bar_width)
-            # bar_width = dividends.shape[0] / 75.0
-            # ax.bar(dividends.index, dividends, alpha=0.5, width=bar_width)
-            # ax.axhline(y=0.0, color='black', linestyle='--', linewidth=1)
-            # ax.grid(True, linestyle='--', linewidth=0.5, color='gray')
-            # for column in dividends.columns:
-            #     annotate_x = dividends[column].index[-1]
-            #     annotate_y = dividends[column].values[-1]
-            #     ax.annotate(column, xy=(annotate_x, annotate_y), fontsize=8, xytext=(2, 2), textcoords='offset points')
         plt.tight_layout()
         self.frame_fundamentals.draw_figure(fig)
         plt.close(fig)
 
     def refresh_frame_fundamentals(self):
+        print('refresh_frame_fundamentals')
         if self.frame_fundamentals != None:
             self.frame_fundamentals.destroy()
         self.frame_fundamentals = Frame_Fundamentals(self.frame_fundamentals_holder, self.symbols)
