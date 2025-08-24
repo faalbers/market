@@ -303,7 +303,7 @@ class YahooF_Info(YahooF):
             return updates
         
         now_ts = int(datetime.now().timestamp())
-        five_days_ts = now_ts - (3600 * 24 * 5)
+        four_days_ts = now_ts - (3600 * 24 * 4)
         half_year_ts = now_ts - (3600 * 24 * 182)
         last_quarter_ts = int((pd.Timestamp('now').normalize() - pd.offsets.QuarterEnd(1)).timestamp())
 
@@ -312,7 +312,7 @@ class YahooF_Info(YahooF):
         found = status_db['found'] > 0
 
         # found and last read more then five days ago
-        five_days = found & (status_db['timestamp'] < five_days_ts)
+        five_days = found & (status_db['timestamp'] < four_days_ts)
         
         # not found and last read more then a half year ago
         half_year = ~found & (status_db['timestamp'] < half_year_ts)

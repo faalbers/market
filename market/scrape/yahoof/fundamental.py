@@ -252,7 +252,7 @@ class YahooF_Fundamental(YahooF):
 
         
         timestamp_pdt = int(datetime.now().timestamp())
-        five_days_ts = timestamp_pdt - (3600 * 24 * 5)
+        four_days_ts = timestamp_pdt - (3600 * 24 * 4)
         three_months_plus_ts = timestamp_pdt - (3600 * 24 * 108)
         half_year_plus_ts = timestamp_pdt - (3600 * 24 * 197)
         one_year_plus_ts = timestamp_pdt - (3600 * 24 * 375)
@@ -262,7 +262,7 @@ class YahooF_Fundamental(YahooF):
 
         found = status_db['found'] > 0
 
-        update_five_days = found & (status_db['timestamp'] < five_days_ts)
+        update_five_days = found & (status_db['timestamp'] < four_days_ts)
         
         update_trailing_quarterly = found & (status_db['last_timestamp_quarterly'] != 0) \
             & (status_db['last_timestamp_trailing'] < three_months_plus_ts) \
