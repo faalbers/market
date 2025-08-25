@@ -30,6 +30,9 @@ class Catalog():
                     ['fullExchangeName', 'exchange_name'],
                     ['sectorDisp', 'sector'],
                     ['industryDisp', 'industry'],
+                    ['marketCap', 'market_cap'],
+                    ['currentPrice', 'price'],
+                    ['trailingPE', 'pe_trailing'],
                     # ['category', 'etf_category'],
                     # ['fundFamily', 'etf_family'],
                 ],
@@ -37,11 +40,52 @@ class Catalog():
         },
         'chart': {
             YahooF_Chart: {
-                # getting all columns to speed it up
-                'chart': [],
+                'chart': [
+                    ['Adj Close', 'price'],
+                    ['High', 'high'],
+                    ['Low', 'low'],
+                    ['Volume', 'volume'],
+                    ['Dividends', 'dividends'],
+                    ['Stock Splits', 'stock_splits'],
+                    ['Capital Gains', 'capital_gains'],
+                ],
             },
         },
         'fundamental': {
+            YahooF_Fundamental: {
+                'trailing': [
+                    ['CurrentAssets', 'current_assets'],
+                    ['CurrentLiabilities', 'current_liabilities'],
+                    ['CashAndCashEquivalents', 'cash_and_cash_equivalents'],
+                    ['TotalRevenue', 'total_revenue'],
+                    ['GrossProfit', 'gross_profit'],
+                    ['OperatingIncome', 'operating_income'],
+                    ['PretaxIncome', 'pretax_income'],
+                    ['NetIncome', 'net_income'],
+                ],
+                'yearly': [
+                    ['CurrentAssets', 'current_assets'],
+                    ['CurrentLiabilities', 'current_liabilities'],
+                    ['CashAndCashEquivalents', 'cash_and_cash_equivalents'],
+                    ['TotalRevenue', 'total_revenue'],
+                    ['GrossProfit', 'gross_profit'],
+                    ['OperatingIncome', 'operating_income'],
+                    ['PretaxIncome', 'pretax_income'],
+                    ['NetIncome', 'net_income'],
+                ],
+                'quarterly': [
+                    ['CurrentAssets', 'current_assets'],
+                    ['CurrentLiabilities', 'current_liabilities'],
+                    ['CashAndCashEquivalents', 'cash_and_cash_equivalents'],
+                    ['TotalRevenue', 'total_revenue'],
+                    ['GrossProfit', 'gross_profit'],
+                    ['OperatingIncome', 'operating_income'],
+                    ['PretaxIncome', 'pretax_income'],
+                    ['NetIncome', 'net_income'],
+                ],
+            },
+        },
+        'fundamental_ok': {
             YahooF_Fundamental: {
                 'trailing': [
                     ['TotalRevenue', 'revenue_total'],
@@ -142,7 +186,7 @@ class Catalog():
         'info': {
             YahooF_Info: {
                 'info': [],
-                'upgrades_downgrades': [],
+                # 'upgrades_downgrades': [],
             },
         },
         'analysis': {
@@ -151,13 +195,20 @@ class Catalog():
                     ['sectorDisp', 'sector'],
                     ['industryDisp', 'industry'],
                     
+                    ['marketCap', 'market_cap'],
                     ['trailingPE', 'pe_ttm'],
-                    ['trailingEps', 'eps_ttm'],
-                    ['priceToSalesTrailing12Months', 'ps_ttm'],
-
+                    ['forwardPE', 'pe_forward'],
+                    ['trailingPegRatio', 'peg_ttm'],
                     ['fundOverview', 'fund_overview'],
-                    ['growthEstimates', 'growth_estimates'],
+                    
+                    # ['trailingEps', 'eps_ttm'],
+                    
+                    # ['priceToSalesTrailing12Months', 'ps_ttm'],
 
+                    # ['growthEstimates', 'growth_estimates'],
+
+                    
+                    
                     # ['dividendRate', 'dividend_rate_forward_$'],
                     # ['trailingAnnualDividendRate', 'dividend_rate_ttm_$'],
 
@@ -207,38 +258,72 @@ class Catalog():
             },
             YahooF_Fundamental: {
                 'trailing': [
-                    ['DilutedEPS', 'eps'],
+                    ['CurrentAssets', 'current_assets'],
+                    ['CurrentLiabilities', 'current_liabilities'],
+                    ['CashAndCashEquivalents', 'cash_and_cash_equivalents'],
+                    ['TotalRevenue', 'total_revenue'],
+                    ['GrossProfit', 'gross_profit'],
+                    ['OperatingIncome', 'operating_income'],
+                    ['PretaxIncome', 'pretax_income'],
+                    ['NetIncome', 'net_income'],
+                    # 'PretaxIncome',
+                    # 'TotalRevenue',
+                    # 'GrossProfit',
+                    # 'OperatingIncome',
+                    # 'PretaxIncome',
+                    # 'NetIncome',
+
+
+                    # ['DilutedEPS', 'eps'],
                     
-                    ['TotalRevenue', 'revenue_total'],
-                    ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-                    ['OperatingIncome', 'income_operating'],
+                    # ['TotalRevenue', 'revenue_total'],
+                    # ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
+                    # ['OperatingIncome', 'income_operating'],
                 ],
                 'yearly': [
-                    ['DilutedEPS', 'eps'],
-                    
-                    ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
-                    ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
-                    ['CurrentLiabilities', 'liabilities_current'],
-                    ['CurrentAssets', 'assets_current'],
+                    ['CurrentAssets', 'current_assets'],
+                    ['CurrentLiabilities', 'current_liabilities'],
+                    ['CashAndCashEquivalents', 'cash_and_cash_equivalents'],
+                    ['TotalRevenue', 'total_revenue'],
+                    ['GrossProfit', 'gross_profit'],
+                    ['OperatingIncome', 'operating_income'],
+                    ['PretaxIncome', 'pretax_income'],
+                    ['NetIncome', 'net_income'],
 
-                    ['TotalRevenue', 'revenue_total'],
-                    ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-                    ['OperatingIncome', 'income_operating'],
-                    ['FreeCashFlow', 'free_cash_flow'],
+                    # ['DilutedEPS', 'eps'],
+                    
+                    # ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
+                    # ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
+                    # ['CurrentLiabilities', 'liabilities_current'],
+                    # ['CurrentAssets', 'assets_current'],
+
+                    # ['TotalRevenue', 'revenue_total'],
+                    # ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
+                    # ['OperatingIncome', 'income_operating'],
+                    # ['FreeCashFlow', 'free_cash_flow'],
                     # ['LongTermDebtAndCapitalLeaseObligation', 'debt_long_term'],
                 ],
                 'quarterly': [
-                    ['DilutedEPS', 'eps'],
+                    ['CurrentAssets', 'current_assets'],
+                    ['CurrentLiabilities', 'current_liabilities'],
+                    ['CashAndCashEquivalents', 'cash_and_cash_equivalents'],
+                    ['TotalRevenue', 'total_revenue'],
+                    ['GrossProfit', 'gross_profit'],
+                    ['OperatingIncome', 'operating_income'],
+                    ['PretaxIncome', 'pretax_income'],
+                    ['NetIncome', 'net_income'],
                     
-                    ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
-                    ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
-                    ['CurrentLiabilities', 'liabilities_current'],
-                    ['CurrentAssets', 'assets_current'],
+                    # ['DilutedEPS', 'eps'],
+                    
+                    # ['CashCashEquivalentsAndShortTermInvestments', 'cash'],
+                    # ['CurrentDebtAndCapitalLeaseObligation', 'debt_current'],
+                    # ['CurrentLiabilities', 'liabilities_current'],
+                    # ['CurrentAssets', 'assets_current'],
 
-                    ['TotalRevenue', 'revenue_total'],
-                    ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
-                    ['OperatingIncome', 'income_operating'],
-                    ['FreeCashFlow', 'free_cash_flow'],
+                    # ['TotalRevenue', 'revenue_total'],
+                    # ['NetIncomeFromContinuingAndDiscontinuedOperation', 'income_net'],
+                    # ['OperatingIncome', 'income_operating'],
+                    # ['FreeCashFlow', 'free_cash_flow'],
                 ],
             },
             # Etrade_Quote: {
@@ -258,9 +343,8 @@ class Catalog():
                     ['Low', 'low'],
                     ['Volume', 'volume'],
                     ['Dividends', 'dividends'],
-                    # ['Stock Splits', 'stock_splits'],
-                    # ['Capital Gains', 'capital_gains'],
-                    # ['Stock Splits', 'splits'],
+                    ['Stock Splits', 'stock_splits'],
+                    ['Capital Gains', 'capital_gains'],
                 ],
             },
         },
