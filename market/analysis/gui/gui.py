@@ -20,9 +20,7 @@ class Analysis_GUI(tk.Tk):
         self.mainloop()
 
     def __build_gui(self):
-        # self.geometry('550x100')
         self.title('Market Analysis')
-        self.geometry("600x200")
 
         # action buttons frame
         frame_actions = tk.Frame(self)
@@ -50,6 +48,12 @@ class Analysis_GUI(tk.Tk):
         # analyse.grid(row=0, column=1)
         # frame_empty = tk.Frame(frame_actions, width=400)
         # frame_empty.grid(row=0, column=2)
+
+        self.resize_window()
+
+    def resize_window(self):
+        self.update_idletasks()
+        self.geometry(f"600x{self.frame_filters.winfo_reqheight()+70}")
 
     def reset_frame_filters(self):
         self.frame_filters.destroy()
@@ -146,7 +150,6 @@ class Analysis_GUI(tk.Tk):
 
 class Frame_Filters(tk.Frame):
     def __init__(self, parent):
-        # super().__init__(parent, highlightbackground="#70B41C", highlightthickness=2)
         super().__init__(parent)
         self.analysis_data = parent.analysis_data
         self.parent = parent
@@ -156,6 +159,7 @@ class Frame_Filters(tk.Frame):
         frame_filter = Frame_Filter(self, filter)
         new_row = self.grid_size()[1]
         frame_filter.grid(row=new_row, column=0, sticky=tk.W)
+        self.parent.resize_window()
 
     def remove_frame_filter(self, frame_filter_a):
         frame_filter_a.destroy()
@@ -175,6 +179,9 @@ class Frame_Filters(tk.Frame):
         for filter in filters:
             self.add_frame_filter(filter)
 
+    def resize_window(self):
+        self.parent.resize_window()
+
 class Frame_Filter(tk.Frame):
     def __init__(self, parent, filter={'and': (), 'or': []}):
         super().__init__(parent)
@@ -182,7 +189,7 @@ class Frame_Filter(tk.Frame):
         self.parent = parent
 
         # make wide enough se we can see hierachy of or filters
-        self.grid_columnconfigure(0, minsize=530)
+        self.grid_columnconfigure(0, minsize=570)
 
         # as filter AND to filter
         self.filter = Filter(self, filter['and'])
@@ -194,9 +201,11 @@ class Frame_Filter(tk.Frame):
 
     def add_filter(self):
         self.frame_filter_or.add_filter()
+        self.parent.resize_window()
     
     def remove_filter(self, filter_a):
         self.parent.remove_frame_filter(self)
+        self.parent.resize_window()
     
     def reset_frame_filter_or(self):
         self.frame_filter_or.destroy()
@@ -208,6 +217,9 @@ class Frame_Filter(tk.Frame):
         filter['and'] = self.filter.get_filter()
         filter['or'] = self.frame_filter_or.get_filters()
         return filter
+
+    def resize_window(self):
+        self.parent.resize_window()
 
 class Frame_Filter_OR(tk.Frame):
     def __init__(self, parent, filters=[]):
@@ -221,6 +233,7 @@ class Frame_Filter_OR(tk.Frame):
         filter = Filter(self, filter)
         new_row = self.grid_size()[1]
         filter.grid(row=new_row, column=0, sticky=tk.E)
+        self.parent.resize_window()
     
     def remove_filter(self, filter_a):
         filter_a.destroy()
@@ -229,6 +242,7 @@ class Frame_Filter_OR(tk.Frame):
                 widget.grid_configure(row=i)
         else:
             self.parent.reset_frame_filter_or()
+        self.parent.resize_window()
 
     def get_filters(self):
         filters = []
