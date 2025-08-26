@@ -65,13 +65,18 @@ class Fundamentals_GUI(tk.Toplevel):
         fundamentals_ttm = self.analysis.get_fundamentals_ttm(fundamentals)
         for parameter, data in self.fundamentals['yearly'].items():
             if parameter in fundamentals_ttm.index:
-                data.loc['ttm'] = fundamentals_ttm.loc[parameter]
+                param_ttm = fundamentals_ttm.loc[parameter].dropna()
+                if not param_ttm.empty:
+                    if not data.empty:
+                        data.loc['ttm'] = param_ttm
+                    else:
+                        data.loc['ttm'] = pd.DataFrame(param_ttm).T
 
     def plot_compare(self):
         data_type = self.data_type.get()
         data_period = self.data_period.get()
         data = self.fundamentals[data_period][data_type].copy()
-        if data_period == 'quarterly':
+        if not data.empty and data_period == 'quarterly':
             data.index = data.index.date
         symbols = [s for s in data.columns if s in self.symbols]
         data = data[symbols]

@@ -134,7 +134,10 @@ class Analysis():
                 std = (series - (count_range*slope + intercept)).std()
                 trend_values['%s_count' % name] = series.shape[0]
                 trend_values['%s_trend' % name] = slope
-                trend_values['%s_std' % name] = std
+                if trend_values[name] != 0.0:
+                    trend_values['%s_std_%%' % name] = (( std / abs(trend_values[name]) ) * 100)
+                else:
+                    trend_values['%s_std_%%' % name] = std
             
             trends.append(trend_values)
 
