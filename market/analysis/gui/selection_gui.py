@@ -7,6 +7,7 @@ from .dividends_gui import Dividends_GUI
 from .fundamentals_gui import Fundamentals_GUI
 from .news_gui import News_GUI
 import webbrowser
+from idlelib.tooltip import Hovertip
 
 class Analysis_Selection_GUI(tk.Toplevel):
     def __init__(self, parent, symbols, columns):
@@ -94,6 +95,7 @@ class Analysis_Selection_GUI(tk.Toplevel):
 class Frame_Data_Tree(tk.Frame):
     def __init__(self, parent, data, columns):
         super().__init__(parent, highlightbackground="#4232F7", highlightthickness=2)
+        self.analysis = parent.analysis
         self.parent = parent
         self.data = data
         
@@ -212,6 +214,7 @@ class Frame_Tree(tk.Frame):
 class Frame_Scroll_Columns(ttk.Frame):
     def __init__(self, parent, columns):
         super().__init__(parent)
+        self.analysis = parent.analysis
         self.parent = parent
 
         self.canvas = tk.Canvas(self)
@@ -228,17 +231,55 @@ class Frame_Scroll_Columns(ttk.Frame):
             if columns[column]: self.columns_state[column].set(1)
             check_button = tk.Checkbutton(self.frame_checkboxes, text=column,
                 variable=self.columns_state[column], command=self.check_changed)
-            check_button.bind('<MouseWheel>', self.mouse_scroll)
+            # check_button.bind('<MouseWheel>', self.mouse_scroll)
             check_button.bind('<ButtonRelease-1>', self.check_released)
             check_button.pack(anchor='w')
             if check_button.winfo_reqwidth() > widest_check: widest_check = check_button.winfo_reqwidth()
             height_check += check_button.winfo_reqheight()
+            # add info hover tip
+            param_info = self.analysis.get_param_info(column)
+            if 'info' in param_info:
+                message = param_info['base_name']
+                if 'unit' in param_info:
+                    message += ' ( unit = %s )' % param_info['unit']
+                message += '\n\n'
+                if 'periodic' in param_info:
+                    message += 'Periodic: %s\n' % param_info['periods']
+                    message += Frame_Scroll_Columns.crop_text(param_info['periodic'], tabs=1) + '\n\n'
+                message += 'Info:\n'
+                message += Frame_Scroll_Columns.crop_text(param_info['info'], tabs=1) + '\n\n'
+                if 'guidance' in param_info:
+                    message += 'Guidance:\n'
+                    message += Frame_Scroll_Columns.crop_text(param_info['guidance'], tabs=1) + '\n\n'
+                if 'values' in param_info:
+                    message += 'Possible Values:\n'
+                    message += Frame_Scroll_Columns.crop_text(param_info['values'], tabs=1) + '\n\n'
+                Hovertip(check_button, message)
+            # hovertip.font = ("Helvetica", 24)
         self.canvas.config(width=widest_check)
         self.canvas.config(scrollregion=(0,0,widest_check, height_check))
 
         scrollbar = ttk.Scrollbar(self, orient = 'vertical', command=self.scroll_update)
         self.canvas.config(yscrollcommand=scrollbar.set)
         scrollbar.pack(side='right', fill='y')
+
+    @staticmethod
+    def crop_text(text, line_size=80, tabs=0):
+        tab_string = '    '
+        if isinstance(text, list):
+            return '\n'.join([(tab_string * tabs + l) for l in text])
+        text = text.replace('\n', ' ')
+        lines = []
+        current_line = ''
+        for word in text.split(' '):
+            if (len(current_line) + len(word) + 1) > line_size:
+                lines.append(tab_string * tabs + current_line)
+                current_line = word + ' '
+                continue
+            current_line += word + ' '
+        lines.append(tab_string * tabs + current_line)
+        lines = '\n'.join(lines)
+        return lines
 
     def scroll_update(self, *params):
         if self.canvas.winfo_height() <= self.frame_checkboxes.winfo_height():
