@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 from tkinter import filedialog, messagebox
 from ...tickers import Tickers
 from ...analysis import Analysis
@@ -41,25 +42,61 @@ class Analysis_GUI(tk.Tk):
         
         analyse = tk.Button(frame_actions, text='Analyse', command=self.analyze)
         analyse.pack(side='right')
-        
-        # self.button_add_filter = tk.Button(frame_actions, text='Add Filter', command=self.frame_filters.add_frame_filter)
-        # self.button_add_filter.grid(row=0, column=0)
-        # analyse = tk.Button(frame_actions, text='Analyse', command=self.analyze)
-        # analyse.grid(row=0, column=1)
-        # frame_empty = tk.Frame(frame_actions, width=400)
-        # frame_empty.grid(row=0, column=2)
+
+        self.param_info = tk.Text(self, height=0)
+        self.param_info.pack(anchor='w', padx=10, pady=10)
 
         self.resize_window()
 
     def resize_window(self):
+        print('resize_window')
         self.update_idletasks()
-        self.geometry(f"600x{self.frame_filters.winfo_reqheight()+70}")
+        height_filters = self.frame_filters.winfo_reqheight()
+        height_info = self.param_info.winfo_reqheight()
+        height = height_filters + height_info + 70
+        self.geometry(f"700x{height}")
+
+    def set_param_info(self, param_info):
+        self.param_info.delete(1.0, tk.END)
+        if len(param_info) == 0:
+            self.param_info.config(height=lines)
+            self.resize_window()
+            return
+
+        self.param_info.insert(tk.END, f'{param_info['name']} ( unit = {param_info['unit'] })\n\n')
+
+        def crop_text(text, line_size=80):
+            text = text.replace('\n', ' ')
+            lines = []
+            current_line = ''
+            for word in text.split(' '):
+                if (len(current_line) + len(word) + 1) > line_size:
+                    lines.append(current_line)
+                    current_line = word + ' '
+                    continue
+                current_line += word + ' '
+            lines.append(current_line)
+            lines = '\n'.join(lines)
+            return lines
+        
+        self.param_info.insert(tk.END, f'{crop_text(param_info['info'])}\n\n')
+        self.param_info.insert(tk.END, f'{crop_text(param_info['periodic'])}\n\n')
+        lines = self.param_info.count('1.0', tk.END, 'lines')
+        self.param_info.config(height=lines)
+        self.resize_window()
 
     def reset_frame_filters(self):
         self.frame_filters.destroy()
+        self.param_info.destroy()
+        
         self.frame_filters = Frame_Filters(self)
         self.button_add_filter.config(command=self.frame_filters.add_frame_filter)
         self.frame_filters.pack(anchor='w', padx=10, pady=10)
+
+        self.param_info = tk.Text(self, height=0)
+        self.param_info.pack(anchor='w', padx=10, pady=10)
+
+        self.resize_window()
 
     def save_filters(self):
         filters = self.frame_filters.get_filters()
@@ -151,6 +188,7 @@ class Analysis_GUI(tk.Tk):
 class Frame_Filters(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
+        self.analysis = parent.analysis
         self.analysis_data = parent.analysis_data
         self.parent = parent
 
@@ -182,14 +220,18 @@ class Frame_Filters(tk.Frame):
     def resize_window(self):
         self.parent.resize_window()
 
+    def set_param_info(self, param_info):
+        self.parent.set_param_info(param_info)
+
 class Frame_Filter(tk.Frame):
     def __init__(self, parent, filter={'and': (), 'or': []}):
         super().__init__(parent)
+        self.analysis = parent.analysis
         self.analysis_data = parent.analysis_data
         self.parent = parent
 
         # make wide enough se we can see hierachy of or filters
-        self.grid_columnconfigure(0, minsize=570)
+        self.grid_columnconfigure(0, minsize=650)
 
         # as filter AND to filter
         self.filter = Filter(self, filter['and'])
@@ -220,10 +262,14 @@ class Frame_Filter(tk.Frame):
 
     def resize_window(self):
         self.parent.resize_window()
+    
+    def set_param_info(self, param_info):
+        self.parent.set_param_info(param_info)
 
 class Frame_Filter_OR(tk.Frame):
     def __init__(self, parent, filters=[]):
         super().__init__(parent)
+        self.analysis = parent.analysis
         self.analysis_data = parent.analysis_data
         self.parent = parent
         for filter in filters:
@@ -250,10 +296,15 @@ class Frame_Filter_OR(tk.Frame):
             filters.append(filter.get_filter())
         return filters
 
+    def set_param_info(self, param_info):
+        self.parent.set_param_info(param_info)
+
 class Filter(tk.Frame):
     def __init__(self, parent, filter=()):
         super().__init__(parent)
+        self.analysis = parent.analysis
         self.analysis_data = parent.analysis_data
+        self.parent = parent
 
         # remove filter from parentbutton
         remove = tk.Button(self, text='X', command=lambda: parent.remove_filter(self))
@@ -263,17 +314,32 @@ class Filter(tk.Frame):
         add = tk.Button(self, text='+', command=parent.add_filter)
         add.grid(row=0, column=1)
 
+        # # add param option menu
+        # params = [self.analysis_data.index.name] + ['type','sub_type'] + sorted(set(self.analysis_data.columns).difference(['type','sub_type']))
+        # # params = ['type','sub_type'] + sorted(set(self.analysis_data.columns).difference(['type','sub_type']))
+        # self.param_select = tk.StringVar()
+        # if len(filter) > 0:
+        #     self.param_select.set(filter[0])
+        # else:
+        #     self.param_select.set(params[0])
+        # param = tk.OptionMenu(self, self.param_select, *params, command=self.param_changed)
+        # param.config(width=25)
+        # param.grid(row=0, column=2)
+
         # add param option menu
         params = [self.analysis_data.index.name] + ['type','sub_type'] + sorted(set(self.analysis_data.columns).difference(['type','sub_type']))
-        # params = ['type','sub_type'] + sorted(set(self.analysis_data.columns).difference(['type','sub_type']))
         self.param_select = tk.StringVar()
         if len(filter) > 0:
             self.param_select.set(filter[0])
         else:
             self.param_select.set(params[0])
-        param = tk.OptionMenu(self, self.param_select, *params, command=self.param_changed)
-        param.config(width=25)
-        param.grid(row=0, column=2)
+        # self.param_last = self.param_select
+        self.param_select.trace('w', self.param_changed)
+        self.param = ttk.Combobox(self, textvariable=self.param_select, values=params, width=45, state='readonly')
+        self.param_shift = False
+        self.param_last = self.param_select.get()
+        self.param.bind('<1>', self.param_clicked)
+        self.param.grid(row=0, column=2)
 
         # add function option menu
         functions = [
@@ -308,8 +374,50 @@ class Filter(tk.Frame):
             self.value = None
             self.param_changed(self.param_select.get())
 
+    def param_clicked(self, event):
+        self.param_shift = bool(event.state & 0x0001)
 
-    def param_changed(self, param):
+    def param_changed(self, *args):
+        if self.param_shift:
+            param_info = self.param_select.get()
+            self.param_shift = False
+            self.param_select.set(self.param_last)
+            self.param_info(param_info)
+            return
+        if not isinstance(self.value, type(None)):
+            self.value.destroy()
+            self.value = None
+        function = self.function_select.get()
+        param = self.param_select.get()
+        self.param_last = param
+        if param == self.analysis_data.index.name:
+            values = sorted(self.analysis_data.index)
+        else:
+            values = sorted(self.analysis_data[param].dropna().unique())
+        # if len(values) == 0:
+        #     for i, widget in enumerate(self.winfo_children()):
+        #         widget.grid_configure(column=i)
+        
+        if function in ['contains', 'startswith', 'endswith']:
+            self.value = tk.Entry(self, width=37)
+            self.value.grid(row=0, column=5)
+        elif len(values) <= 200:
+            if isinstance(values[0], str):
+                self.value_select.set(values[0])
+                self.value = ttk.Combobox(self, textvariable=self.value_select, values=values, width=30)
+                self.value.grid(row=0, column=5)
+            else:
+                self.value = tk.Entry(self, width=37)
+                self.value.grid(row=0, column=5)
+        else:
+            self.value = tk.Entry(self, width=37)
+            self.value.grid(row=0, column=5)
+
+    def param_info(self, param):
+        param_info = self.analysis.get_param_info(param)
+        self.parent.set_param_info(param_info)
+
+    def param_changed_old(self, param):
         if not isinstance(self.value, type(None)):
             self.value.destroy()
             self.value = None
@@ -349,3 +457,4 @@ class Filter(tk.Frame):
         else:
             value = self.value_select.get()
         return (column, function, value)
+

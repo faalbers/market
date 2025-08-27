@@ -1,6 +1,7 @@
 from ..tickers import Tickers
 from ..vault import Vault
 from ..viz import Viz
+from .analysis_params import Analysis_Params
 import pandas as pd
 import numpy as np
 from pprint import pp
@@ -17,6 +18,7 @@ class Analysis():
         self.db = Database('analysis')
         self.vault = Vault()
         self.__get_data()
+        self.params = Analysis_Params()
         # self.viz = Viz()
         # self.benchmarks = Tickers(['SPY', 'QQQ'])
 
@@ -375,3 +377,6 @@ class Analysis():
     # values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('+1y')).apply(lambda x: x.get('stockTrend'))*100
     # info.loc[is_growth_estimates, 'growth_trend_y_next_%'] = values
     # info = info.drop('growth_estimates', axis=1)
+
+    def get_param_info(self, param):
+        return self.params.get_param_info(param)
