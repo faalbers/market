@@ -203,6 +203,7 @@ class YahooF_Fundamental(YahooF):
 
         # check what symbols need to be updated
         updates = self.update_check(key_values, forced=forced)
+        # updates = self.update_check_existing(key_values, forced=forced)
         for update, symbols in updates.items():
             print(update, len(symbols))
         if len(updates['all']) == 0: return
@@ -237,6 +238,24 @@ class YahooF_Fundamental(YahooF):
 
         self.multi_execs(exec_list, 'Fundamental')
 
+    def update_check_existing(self, symbols, forced=False):
+        trailing = self.db.table_read('trailing', columns=['timestamp'])
+        table_reference = self.db.table_read('table_reference')
+
+        updates = {
+            'trailing': sorted(trailing.index),
+            'yearly': sorted(table_reference['yearly'].dropna().index),
+            'quarterly': sorted(table_reference['quarterly'].dropna().index),
+        }
+
+        updates['all'] = set()
+        updates['all'].update(updates['trailing'])
+        updates['all'].update(updates['yearly'])    
+        updates['all'].update(updates['quarterly'])
+        updates['all'] = sorted(updates['all'])
+                                       
+        return updates
+    
     def update_check(self, symbols, forced=False):
         status_db = self.db.table_read('status_db', keys=symbols)
 
@@ -359,7 +378,7 @@ class YahooF_Fundamental(YahooF):
                     status['last_timestamp_trailing'] = int(df.iloc[0]['timestamp'])
                     status['last_timestamp_trailing_str'] = str(pd.to_datetime(status['last_timestamp_trailing'], unit='s'))
                 else:
-                    self.db.table_write_reference(symbol, period, df, update=False)
+                    self.db.table_write_reference(symbol, period, df, replace=True)
                     status['last_timestamp_%s' % period] = int(df.index[-1])
                     status['last_timestamp_%s_str' % period] = str(pd.to_datetime(status['last_timestamp_%s' % period], unit='s'))
         
