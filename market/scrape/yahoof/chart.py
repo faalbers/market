@@ -219,15 +219,17 @@ class YahooF_Chart(YahooF):
                     for symbol in charts_symbols:
                         # go through each chart symbol
                         # remove the cached ones we don't need
-                        if pop_symbols and symbol not in symbols: charts.pop(symbol)
+                        if pop_symbols and symbol not in symbols:
+                            charts.pop(symbol)
+                            continue
                         # just keep columns that we need
                         found_columns = list(set(charts[symbol].columns).intersection(columns_set))
                         if len(found_columns) == 0:
                             # no needed columns found, pop the chart
                             charts.pop(symbol)
-                        else:
-                            # columns found keep only them and only needed columns
-                            charts[symbol] = charts[symbol][found_columns]
+                            continue
+                        # columns found keep only them and only needed columns
+                        charts[symbol] = charts[symbol][found_columns]
                 return charts
 
         # get from db
