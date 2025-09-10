@@ -380,7 +380,7 @@ class YahooF_Info(YahooF):
             result_data['earnings_dates'].sort_index(inplace=True)
             # remove duplicates
             result_data['earnings_dates'] = result_data['earnings_dates'].groupby(level=0).last()
-            self.db.table_write_reference(symbol, 'earnings_dates', result_data['earnings_dates'], update=False)
+            self.db.table_write_reference(symbol, 'earnings_dates', result_data['earnings_dates'], replace=True)
         
         if 'upgrades_downgrades' in result_data:
             found = True
@@ -388,7 +388,7 @@ class YahooF_Info(YahooF):
             result_data['upgrades_downgrades'].index = result_data['upgrades_downgrades'].index.astype('int64') // 10**9
             result_data['upgrades_downgrades'].index.name = 'timestamp'
             result_data['upgrades_downgrades'].sort_index(inplace=True)
-            self.db.table_write_reference(symbol, 'upgrades_downgrades', result_data['upgrades_downgrades'], update=False)
+            self.db.table_write_reference(symbol, 'upgrades_downgrades', result_data['upgrades_downgrades'], replace=True)
         
         # make status_db
         timestamp_last_quarter = int((pd.Timestamp('now').normalize() - pd.offsets.QuarterEnd(1)).timestamp())
