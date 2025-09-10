@@ -72,7 +72,6 @@ class Fundamentals_GUI(tk.Toplevel):
                         data.loc['ttm'] = param_ttm
                     else:
                         data.loc['ttm'] = pd.DataFrame(param_ttm).T
-        print(self.fundamentals['yearly'])
 
     def plot_compare(self):
         data_type = self.data_type.get()
