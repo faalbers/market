@@ -33,6 +33,7 @@ class Fundamentals_GUI(tk.Toplevel):
             'operating profit margin',
             'profit margin',
             'net profit margin',
+            'free cash flow',
         ]
         self.data_type = tk.StringVar()
         self.data_type.set(data_type[0])
@@ -71,9 +72,13 @@ class Fundamentals_GUI(tk.Toplevel):
                         data.loc['ttm'] = param_ttm
                     else:
                         data.loc['ttm'] = pd.DataFrame(param_ttm).T
+        print(self.fundamentals['yearly'])
 
     def plot_compare(self):
         data_type = self.data_type.get()
+        ylabel = data_type + ' %'
+        if data_type == 'free cash flow':
+            ylabel = data_type + ' (millions)'
         data_period = self.data_period.get()
         data = self.fundamentals[data_period][data_type].copy()
         if not data.empty and data_period == 'quarterly':
@@ -85,7 +90,7 @@ class Fundamentals_GUI(tk.Toplevel):
         fig, ax = plt.subplots()
         if not data.empty:
             data.plot(ax=ax, kind='bar')
-            ax.set_ylabel(data_type + ' %')
+            ax.set_ylabel(ylabel)
             ax.grid(True, linestyle='--', linewidth=0.5, color='gray')
         plt.tight_layout()
         self.frame_fundamentals.draw_figure(fig)

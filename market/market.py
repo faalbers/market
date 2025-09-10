@@ -103,12 +103,14 @@ class Market():
         symbols = quicken.get_securities()['symbol'].dropna().unique()
         print(symbols)
         tickers = self.get_tickers(symbols)
-        charts = tickers.get_charts(update=True, forced=True)
+        charts = tickers.get_vault_charts(update=True, forced=True)
+        # charts = tickers.get_vault_charts()['chart']
         dftn = pd.Series()
         for symbol, df in charts.items():
+            print(df)
             df_symbol = df.loc[:date_string]
             if df_symbol.shape[0] == 0: continue
-            dftn[symbol] = df_symbol.iloc[-1]['Close']
+            dftn[symbol] = df_symbol.iloc[-1]['price']
         dftn = dftn.dropna().round(2)
         print(dftn)
         dftn.to_csv('Z:\\Quicken\\QuickenImport.csv', header=False, sep=',', encoding='utf-8')

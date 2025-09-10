@@ -246,6 +246,9 @@ class Frame_Scroll_Columns(ttk.Frame):
                 if 'periodic' in param_info:
                     message += 'Periodic: %s\n' % param_info['periods']
                     message += Frame_Scroll_Columns.crop_text(param_info['periodic'], tabs=1) + '\n\n'
+                if 'peers' in param_info:
+                    message += 'Peers:\n'
+                    message += Frame_Scroll_Columns.crop_text(param_info['peers'], tabs=1) + '\n\n'
                 message += 'Info:\n'
                 message += Frame_Scroll_Columns.crop_text(param_info['info'], tabs=1) + '\n\n'
                 if 'guidance' in param_info:
