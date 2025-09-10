@@ -45,6 +45,12 @@ class Analysis():
         print('Get Analysis: done')
         vault_analysis['type'] = data['type']
 
+        # add treasury rate 10y
+        if not '^TNX' in vault_analysis['chart']:
+            vault_analysis['treasury_rate_10y'] = Tickers(['^TNX']).get_vault_charts()['chart']['^TNX']['price'].iloc[-1]
+        else:
+            vault_analysis['treasury_rate_10y'] = vault_analysis['chart']['^TNX']['price'].iloc[-1]
+
         # merge info
         print('Info:')
         info = vault_analysis['info']
@@ -100,7 +106,6 @@ class Analysis():
         for period in ['yearly', 'quarterly']:
             for param, trend_data in fundamentals[period].items():
                 if param in params_skip: continue
-                print('%s: %s' % (period, param))
                 name = param.replace(' ', '_')+'_'+period
                 trends = self.get_trends_percent(trend_data, name=name)
                 data = data.merge(trends, how='left', left_index=True, right_index=True)
@@ -110,6 +115,10 @@ class Analysis():
         fundamentals['ttm'] = fundamentals['ttm'].rename(columns=rename)
         data = data.merge(fundamentals['ttm'], how='left', left_index=True, right_index=True)
         print('fundamentals: done')
+
+        # merge margin of safety
+        margins_of_safety = self.get_margins_of_safety(fundamentals, vault_analysis)
+        data = data.merge(margins_of_safety, how='left', left_index=True, right_index=True)
 
         # infer al object columns
         data = data.infer_objects()
@@ -288,6 +297,8 @@ class Analysis():
                 data['profit margin'] = (trailing['pretax_income'] / trailing['total_revenue']) * 100
             if 'net_income' in trailing.columns:
                 data['net profit margin'] = (trailing['net_income'] / trailing['total_revenue']) * 100
+        if 'free_cash_flow' in trailing.columns:
+            data['free cash flow'] = trailing['free_cash_flow']
 
         # post fix data
         data = data.T
@@ -379,6 +390,61 @@ class Analysis():
 
         return data
     
+    def get_margins_of_safety(self, fundamentals, vault_analysis):
+        data = pd.DataFrame(columns=['margin_of_safety', 'margin_of_safety_volatility'])
+        if not 'yearly' in fundamentals: return data
+        if not 'free cash flow' in fundamentals['yearly']: return data
+        if not 'price to free cash flow' in fundamentals['yearly']: return data
+        if not 'trailing' in vault_analysis: return data
+        if not 'treasury_rate_10y' in vault_analysis: return data
+
+        for symbol in fundamentals['yearly']['free cash flow'].columns:
+            if not symbol in fundamentals['yearly']['price to free cash flow'].columns: continue
+        
+            # get free cash flow trend
+            fcf_yearly = fundamentals['yearly']['free cash flow'][symbol].dropna().reset_index(drop=True)
+            if fcf_yearly.shape[0] < 2: continue
+            coeffs = np.polyfit(fcf_yearly.index, fcf_yearly.values, 1)
+            trend = np.polyval(coeffs, fcf_yearly.index)
+            residuals = fcf_yearly.values - trend
+            residual_std = np.std(residuals)
+            volatility = (residual_std / np.abs(trend.mean())) * 100.0 # in percent
+            data.loc[symbol, 'margin_of_safety_volatility'] = volatility
+            trend_mean = np.mean(trend)
+            if trend_mean <= 0: continue # can not deduct growth
+            growth = coeffs[0] / trend_mean # in decimal
+
+            # get price to free cash flow multiples average
+            pfcf_yearly = fundamentals['yearly']['price to free cash flow'][symbol].dropna()
+            pfcf_yearly_mean = pfcf_yearly.mean() # in multiples
+            pfcf_yearly_median = pfcf_yearly.median() # in multiples
+            similarity = abs(pfcf_yearly_mean-pfcf_yearly_median) / abs((pfcf_yearly_mean+pfcf_yearly_median)/2)
+            if similarity > 0.2:
+                pfcf_yearly_average = pfcf_yearly_median
+            else:
+                pfcf_yearly_average = pfcf_yearly_mean
+
+            # calculate intrinsic value after 10 years
+            years = 10
+            discount = (vault_analysis['treasury_rate_10y'] + 3.0) / 100.0 # at least 10y treasury rate + 3%, change to decimal
+            if not symbol in vault_analysis['trailing'].index: continue
+            if not 'free_cash_flow' in vault_analysis['trailing'].columns: continue
+
+            fcf = vault_analysis['trailing'].loc[symbol, 'free_cash_flow']
+            if fcf <= 0: continue
+            values = fcf * (1 + growth) ** np.arange(years+1)
+            fcf_growth = pd.Series(values).to_frame('fcf')
+            fcf_growth['fcf_dcf'] = fcf_growth['fcf'] / ((1.0 + discount) ** np.arange(years+1))
+            terminal_value = fcf_growth['fcf_dcf'].iloc[-1] * pfcf_yearly_average # using exit_multiple
+            intrinsic_value = fcf_growth['fcf_dcf'].iloc[:-1].sum() + terminal_value
+
+            # calculate margin of safety
+            market_cap = vault_analysis['info'].loc[symbol, 'market_cap']
+            margin_of_safety = (1-(market_cap/intrinsic_value))*100 # in percent
+            data.loc[symbol, 'margin_of_safety'] = margin_of_safety
+
+        return data
+
     def __get_data(self):
         symbols = self.tickers.get_symbols()
         # get newest analysis db timestamps
