@@ -54,13 +54,11 @@ class Analysis():
         info['timestamp'] = timestamp
 
         # name market cap
-        info['market_cap'] = info['market_cap'] / 1000000
-        info.loc[info['market_cap'] >= 250, 'market_cap_name'] = 'Small'
-        info.loc[info['market_cap'] >= 2000, 'market_cap_name'] = 'Mid'
-        info.loc[info['market_cap'] >= 10000, 'market_cap_name'] = 'Large'
-        info.loc[info['market_cap'] >= 200000, 'market_cap_name'] = 'Mega'
-        info.drop('market_cap', axis=1, inplace=True)
-        info.rename(columns={'market_cap_name': 'market_cap'}, inplace=True)
+        market_cap = info['market_cap'] / 1000000
+        info.loc[market_cap >= 250, 'market_cap_name'] = 'Small'
+        info.loc[market_cap >= 2000, 'market_cap_name'] = 'Mid'
+        info.loc[market_cap >= 10000, 'market_cap_name'] = 'Large'
+        info.loc[market_cap >= 200000, 'market_cap_name'] = 'Mega'
 
         # handle funds info
         if True:
@@ -110,6 +108,10 @@ class Analysis():
 
         # infer al object columns
         data = data.infer_objects()
+
+        # keep market_cap_name as market_cap
+        data.drop('market_cap', axis=1, inplace=True)
+        data.rename(columns={'market_cap_name': 'market_cap'}, inplace=True)
 
         # write to db
         self.db.backup()
@@ -312,6 +314,15 @@ class Analysis():
             # prepare dataframe
             symbol_period = vault_analysis[period][symbol].copy()
             symbol_period.dropna(axis=0, how='all', inplace=True)
+
+            # add price to dates
+            if symbol in vault_analysis['chart']:
+                for date in symbol_period.index:
+                    prices = vault_analysis['chart'][symbol].loc[:date]
+                    if not prices.empty:
+                        symbol_period.loc[date, 'price'] = prices['price'].iloc[-1]
+
+            # change yearly dates to year
             if period == 'yearly':
                 symbol_period.index = symbol_period.index.year
             symbol_period = symbol_period.groupby(symbol_period.index).last() # some have more then one results in a period, strangely
