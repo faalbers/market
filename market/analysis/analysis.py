@@ -303,6 +303,7 @@ class Analysis():
             'operating profit margin': [],
             'profit margin': [],
             'net profit margin': [],
+            'pe': [],
         }
 
         # go through each symbol's dataframe
@@ -345,7 +346,11 @@ class Analysis():
                     add_values('profit margin', symbol, (symbol_period['pretax_income'] / symbol_period['total_revenue']) * 100)
                 if 'net_income' in symbol_period.columns:
                     add_values('net profit margin', symbol, (symbol_period['net_income'] / symbol_period['total_revenue']) * 100)
-        
+            if 'price' in symbol_period.columns:
+                if 'eps' in symbol_period.columns:
+                    eps = symbol_period['eps']
+                    if period == 'quarterly': eps = eps * 4
+                    add_values('pe', symbol, symbol_period['price']/eps)
         # create dataframe pre parameter
         for parameter, series in data.items():
             data[parameter] = pd.DataFrame(series).T
