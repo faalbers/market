@@ -304,6 +304,8 @@ class Analysis():
             'profit margin': [],
             'net profit margin': [],
             'pe': [],
+            'free cash flow': [],
+            'price to free cash flow': [],
         }
 
         # go through each symbol's dataframe
@@ -346,11 +348,20 @@ class Analysis():
                     add_values('profit margin', symbol, (symbol_period['pretax_income'] / symbol_period['total_revenue']) * 100)
                 if 'net_income' in symbol_period.columns:
                     add_values('net profit margin', symbol, (symbol_period['net_income'] / symbol_period['total_revenue']) * 100)
+            if 'free_cash_flow' in symbol_period.columns:
+                add_values('free cash flow', symbol, symbol_period['free_cash_flow'])
             if 'price' in symbol_period.columns:
                 if 'eps' in symbol_period.columns:
                     eps = symbol_period['eps']
                     if period == 'quarterly': eps = eps * 4
                     add_values('pe', symbol, symbol_period['price']/eps)
+                if 'shares' in symbol_period.columns:
+                    market_cap = symbol_period['price'] * symbol_period['shares']
+                    if 'free_cash_flow' in symbol_period.columns:
+                        fcf = symbol_period['free_cash_flow']
+                        if period == 'quarterly': fcf = fcf * 4
+                        add_values('price to free cash flow', symbol, market_cap / fcf)
+        
         # create dataframe pre parameter
         for parameter, series in data.items():
             data[parameter] = pd.DataFrame(series).T
