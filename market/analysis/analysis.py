@@ -94,12 +94,17 @@ class Analysis():
         fundamentals['quarterly'] = self.get_fundamentals(vault_analysis, 'quarterly')
         print('fundamentals: ttm')
         fundamentals['ttm'] = self.get_fundamentals_ttm(vault_analysis).T
+        
         # merge trends
+        params_skip = ['free cash flow', 'price to free cash flow']
         for period in ['yearly', 'quarterly']:
             for param, trend_data in fundamentals[period].items():
+                if param in params_skip: continue
+                print('%s: %s' % (period, param))
                 name = param.replace(' ', '_')+'_'+period
                 trends = self.get_trends_percent(trend_data, name=name)
                 data = data.merge(trends, how='left', left_index=True, right_index=True)
+        
         # rename ttm parameters
         rename = {c:(c.replace(' ', '_')+'_ttm') for c in fundamentals['ttm'].columns}
         fundamentals['ttm'] = fundamentals['ttm'].rename(columns=rename)
