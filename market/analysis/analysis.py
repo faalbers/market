@@ -461,9 +461,37 @@ class Analysis():
             cache_symbols = sorted(cache_symbols)
             self.__cache_update(cache_symbols)
         
-        self.data = self.db.table_read('analysis', keys=symbols)
+        # self.data = self.db.table_read('analysis', keys=symbols)
+        self.data = self.db.table_read('analysis')
         self.data.drop('timestamp', axis=1, inplace=True)
 
+        # add industry peers data
+        industries = self.data['industry'].dropna().unique()
+        peers_parameters = [
+            'pe_ttm', 'pe_forward',
+        ]
+        peers_parameters = [p for p in peers_parameters if p in self.data.columns]
+        peers_parameters_new = [(p+'_peers') for p in peers_parameters]
+        for industry in industries:
+            # go through each industry
+            is_industry = self.data['industry'] == industry
+
+            # find mean or median from each industry
+            industry_peers = self.data[is_industry][peers_parameters]
+            industry_average = industry_peers.mean().to_frame('mean')
+            industry_average['median'] = industry_peers.median()
+            industry_average['similarity'] = abs(industry_average['mean']-industry_average['median']) / \
+                ((industry_average['mean']+industry_average['median']).abs()/2)
+            industry_average.loc[industry_average['similarity'] > 0.2, 'average'] = industry_average['median']
+            industry_average.loc[industry_average['similarity'] <= 0.2, 'average'] = industry_average['mean']
+            industry_average = industry_average['average']
+
+            # set difference between values and peers values if symbols in that industry
+            self.data.loc[is_industry, peers_parameters_new] = self.data.loc[is_industry, peers_parameters].values - industry_average.values
+    
+        # only get needed symbols
+        self.data = self.data[self.data.index.isin(symbols)]
+        
     # useful ?
     # is_growth_estimates = info['growth_estimates'].notna()
     # values = info.loc[is_growth_estimates, 'growth_estimates'].apply(lambda x: x.get('0q')).apply(lambda x: x.get('stockTrend'))*100
