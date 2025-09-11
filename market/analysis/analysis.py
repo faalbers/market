@@ -5,7 +5,7 @@ from .analysis_params import Analysis_Params
 import pandas as pd
 import numpy as np
 from pprint import pp
-from ..utils import storage
+from ..utils import storage, utils
 from ..database import Database
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -88,7 +88,11 @@ class Analysis():
         dividends = self.get_dividend_yields(vault_analysis)
         for period in ['yearly', 'ttm']:
             name = 'dividends_'+period
-            trends = self.get_trends_percent(dividends[period], name=name)
+            trends = self.get_trends(dividends[period], name=name)
+            end_period = trends[name+'_period_end'].infer_objects()
+            trends.drop(name+'_period_end', axis=1, inplace=True)
+            if period == 'yearly':
+                trends[name+'_year_end'] = end_period
             data = data.merge(trends, how='left', left_index=True, right_index=True)
         print('charts: done')
 
@@ -107,7 +111,14 @@ class Analysis():
             for param, trend_data in fundamentals[period].items():
                 if param in params_skip: continue
                 name = param.replace(' ', '_')+'_'+period
-                trends = self.get_trends_percent(trend_data, name=name)
+                trends = self.get_trends(trend_data, name=name)
+                end_period = trends[name+'_period_end'].infer_objects()
+                trends.drop(name+'_period_end', axis=1, inplace=True)
+                if period == 'quarterly':
+                    trends[name+'_year_end'] = end_period.dt.year
+                    trends[name+'_month_end'] = end_period.dt.month
+                elif period == 'yearly':
+                    trends[name+'_year_end'] = end_period
                 data = data.merge(trends, how='left', left_index=True, right_index=True)
         
         # rename ttm parameters
@@ -127,42 +138,25 @@ class Analysis():
         data.drop('market_cap', axis=1, inplace=True)
         data.rename(columns={'market_cap_name': 'market_cap'}, inplace=True)
 
+        # return
+    
         # write to db
         self.db.backup()
         self.db.table_write('analysis', data)
 
-    def get_trends_percent(self, data, name):
-        trends = []
-        for column in data.columns:
-            series = data[column].dropna()
-            if series.shape[0] == 0: continue
-            
-            trend_values = pd.Series(name=column)
-            trend_values[name] = series.iloc[-1]
-            last_date = series.index[-1]
-            if isinstance(last_date, pd.Timestamp):
-                trend_values['%s_end_year' % name] = last_date.year
-                trend_values['%s_end_month' % name] = last_date.month
-            elif last_date > 1900:
-                trend_values['%s_end_year' % name] = last_date
-            
-            if series.shape[0] >= 2:
-                count_range = range(series.shape[0])
-                slope, intercept = np.polyfit(count_range, series.values, 1)
-                std = (series - (count_range*slope + intercept)).std()
-                trend_values['%s_count' % name] = series.shape[0]
-                trend_values['%s_trend' % name] = slope
-                if trend_values[name] != 0.0:
-                    trend_values['%s_std_%%' % name] = (( std / abs(trend_values[name]) ) * 100)
-                else:
-                    trend_values['%s_std_%%' % name] = std
-            
-            trends.append(trend_values)
+    def get_trends(self, data, name):
+        renames = {
+            'trend_step_ratio': '%s_trend' % name,
+            'step_count': '%s_count' % name,
+            'volatility': '%s_volatility' % name,
+            'last_valid_value': name,
+            'last_valid_index': '%s_period_end' % name,
+        }
+        trends_result = utils.get_trends(data)[list(renames)]
+        trends_result.rename(columns=renames, inplace=True)
 
-        trends = pd.DataFrame(trends)
-        
-        return trends
-        
+        return trends_result
+
     def get_active(self, vault_analysis):
         active = pd.Series(name='active')
         now = pd.Timestamp.now()
@@ -460,11 +454,15 @@ class Analysis():
             cache_symbols.update(cache_timestamps[cache_timestamps['timestamp'] < analysis_timestamp].index)
             cache_symbols = sorted(cache_symbols)
             self.__cache_update(cache_symbols)
-        
+
+        # return
+            
         # self.data = self.db.table_read('analysis', keys=symbols)
         self.data = self.db.table_read('analysis')
         self.data.drop('timestamp', axis=1, inplace=True)
 
+        return
+    
         # add industry peers data
         industries = self.data['industry'].dropna().unique()
         peers_parameters = [
