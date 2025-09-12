@@ -222,6 +222,13 @@ or a multi-year average. It indicates if a stock's current price is justified by
                 '    Could indicate the stock is overvalued relative to its historical growth, signaling caution.',
             ]
         },
+        'margin_of_safety': {
+            'info':
+"""The margin of safety refers to the difference between a stock's intrinsic value (what it's worth in 10 years based on fundamentals)
+and its market cap (what it's currently worth)""",
+            'unit': '%',
+            'guidance': 'Buy above a certain value. Most select 35%. Lower value is more risk.',
+        },
     }
     
     def get_param_info(self, param):
@@ -253,9 +260,9 @@ or a multi-year average. It indicates if a stock's current price is justified by
                 info['periodic'] = \
                 f"This is a yearly trend amount over '{param_found}_yearly_count' years "+ \
                 f"and ending in the year '{param_found}_yearly_end_year'"
-            elif 'std_%' in param:
+            elif 'volatility' in param:
                 info['periodic'] = \
-                f"This is a standard deviation percentage from last year's amount over '{param_found}_yearly_count' years "+ \
+                f"This is the volatility percentage from the period over '{param_found}_yearly_count' years "+ \
                 f"and ending in the year '{param_found}_yearly_end_year'"
             elif 'count' in param:
                 info['periodic'] = \
@@ -273,9 +280,9 @@ or a multi-year average. It indicates if a stock's current price is justified by
                 info['periodic'] = \
                 f"This is a 12 months block period trend amount over the count of '{param_found}_ttm_count' periods "+ \
                 f"and ending in the last block period"
-            elif 'std_%' in param:
+            elif 'volatility' in param:
                 info['periodic'] = \
-                f"This is a standard deviation percentage from last 12 months block period amount over the count of '{param_found}_ttm_count' periods "+ \
+                f"This is the volatility percentage from last 12 months block period amount over the count of '{param_found}_ttm_count' periods "+ \
                 f"and ending in the last block period"
             elif 'count' in param:
                 info['periodic'] = \
@@ -290,9 +297,9 @@ or a multi-year average. It indicates if a stock's current price is justified by
                 info['periodic'] = \
                 f"This is a quarterly trend amount over the count of '{param_found}_quarterly_count' quarters "+ \
                 f"and ending in the quarter year '{param_found}_quarterly_end_year' and month '{param_found}_quarterly_end_month'"
-            elif 'std_%' in param:
+            elif 'volatility' in param:
                 info['periodic'] = \
-                f"This is a standard deviation percentage from last quarter's amount over the of '{param_found}_quarterly_count' quarters "+ \
+                f"This is the volatility percentage from the periods over '{param_found}_quarterly_count' quarters "+ \
                 f"and ending in the quarter year '{param_found}_quarterly_end_year' and month '{param_found}_quarterly_end_month'"
             elif 'count' in param:
                 info['periodic'] = \
@@ -307,12 +314,16 @@ or a multi-year average. It indicates if a stock's current price is justified by
                 info['periodic'] = \
                 f"This is the amount ending in the quarter '{param_found}_quarterly_end_year' and month '{param_found}_quarterly_end_month'"
 
-        elif 'peers' in param:
+        elif 'peers_diff' in param:
             if 'ratio' in param:
-                info['peers'] = \
+                info['peers_diff'] = \
                 f"This is the ratio of the difference between the value of '{param_found}' and the average of all of it's peers."
             else:
-                info['peers'] = \
+                info['peers_diff'] = \
                 f"This is the difference between the value of '{param_found}' and the average of all of it's peers."
+        
+        elif 'volatility' in param:
+            info['volatility'] = \
+            f"This is the volatility percentage from periods used to calculate this value."
         
         return info

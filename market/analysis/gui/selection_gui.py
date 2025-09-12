@@ -246,9 +246,12 @@ class Frame_Scroll_Columns(ttk.Frame):
                 if 'periodic' in param_info:
                     message += 'Periodic: %s\n' % param_info['periods']
                     message += Frame_Scroll_Columns.crop_text(param_info['periodic'], tabs=1) + '\n\n'
-                if 'peers' in param_info:
-                    message += 'Peers:\n'
-                    message += Frame_Scroll_Columns.crop_text(param_info['peers'], tabs=1) + '\n\n'
+                if 'peers_diff' in param_info:
+                    message += 'Peers Difference:\n'
+                    message += Frame_Scroll_Columns.crop_text(param_info['peers_diff'], tabs=1) + '\n\n'
+                if 'volatility' in param_info:
+                    message += 'Volatility:\n'
+                    message += Frame_Scroll_Columns.crop_text(param_info['volatility'], tabs=1) + '\n\n'
                 message += 'Info:\n'
                 message += Frame_Scroll_Columns.crop_text(param_info['info'], tabs=1) + '\n\n'
                 if 'guidance' in param_info:
