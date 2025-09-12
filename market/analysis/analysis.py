@@ -392,52 +392,33 @@ class Analysis():
         if not 'trailing' in vault_analysis: return data
         if not 'treasury_rate_10y' in vault_analysis: return data
 
-        for symbol in fundamentals['yearly']['free cash flow'].columns:
-            if not symbol in fundamentals['yearly']['price to free cash flow'].columns: continue
+        renames = {
+            'volatility': 'margin_of_safety_volatility',
+            'trend_step_ratio': 'growth',
+        }
+        print('yearly free cash flow')
+        mos = utils.get_trends(fundamentals['yearly']['free cash flow'])[list(renames)]
+        mos.rename(columns=renames, inplace=True)
+        mos['pfcf'] = utils.get_average(fundamentals['yearly']['price to free cash flow'])
+        mos['fcf'] = vault_analysis['trailing'].loc[mos.index.intersection(vault_analysis['trailing'].index), 'free_cash_flow']
+        mos['market_cap'] = vault_analysis['info'].loc[mos.index.intersection(vault_analysis['info'].index), 'market_cap']
+        mos.dropna(how='any', axis=0, inplace=True)
+        mos = mos[(mos['pfcf'] > 0) & (mos['fcf'] > 0)]
         
-            # get free cash flow trend
-            fcf_yearly = fundamentals['yearly']['free cash flow'][symbol].dropna().reset_index(drop=True)
-            if fcf_yearly.shape[0] < 2: continue
-            coeffs = np.polyfit(fcf_yearly.index, fcf_yearly.values, 1)
-            trend = np.polyval(coeffs, fcf_yearly.index)
-            residuals = fcf_yearly.values - trend
-            residual_std = np.std(residuals)
-            volatility = (residual_std / np.abs(trend.mean())) * 100.0 # in percent
-            data.loc[symbol, 'margin_of_safety_volatility'] = volatility
-            trend_mean = np.mean(trend)
-            if trend_mean <= 0: continue # can not deduct growth
-            growth = coeffs[0] / trend_mean # in decimal
-
-            # get price to free cash flow multiples average
-            pfcf_yearly = fundamentals['yearly']['price to free cash flow'][symbol].dropna()
-            pfcf_yearly_mean = pfcf_yearly.mean() # in multiples
-            pfcf_yearly_median = pfcf_yearly.median() # in multiples
-            similarity = abs(pfcf_yearly_mean-pfcf_yearly_median) / abs((pfcf_yearly_mean+pfcf_yearly_median)/2)
-            if similarity > 0.2:
-                pfcf_yearly_average = pfcf_yearly_median
-            else:
-                pfcf_yearly_average = pfcf_yearly_mean
-
-            # calculate intrinsic value after 10 years
-            years = 10
-            discount = (vault_analysis['treasury_rate_10y'] + 3.0) / 100.0 # at least 10y treasury rate + 3%, change to decimal
-            if not symbol in vault_analysis['trailing'].index: continue
-            if not 'free_cash_flow' in vault_analysis['trailing'].columns: continue
-
-            fcf = vault_analysis['trailing'].loc[symbol, 'free_cash_flow']
-            if fcf <= 0: continue
-            values = fcf * (1 + growth) ** np.arange(years+1)
+        discount = (vault_analysis['treasury_rate_10y'] + 3.0) / 100.0 # at least 10y treasury rate + 3%, change to decimal
+        years = 10
+        years = np.arange(10+1)
+        for symbol, row in mos.iterrows():
+            values = row['fcf'] * (1 + row['growth']) ** years
             fcf_growth = pd.Series(values).to_frame('fcf')
-            fcf_growth['fcf_dcf'] = fcf_growth['fcf'] / ((1.0 + discount) ** np.arange(years+1))
-            terminal_value = fcf_growth['fcf_dcf'].iloc[-1] * pfcf_yearly_average # using exit_multiple
+            fcf_growth['fcf_dcf'] = fcf_growth['fcf'] / ((1.0 + discount) ** years)
+            terminal_value = fcf_growth['fcf_dcf'].iloc[-1] * row['pfcf'] # using exit_multiple
             intrinsic_value = fcf_growth['fcf_dcf'].iloc[:-1].sum() + terminal_value
+            margin_of_safety = 1.0-(row['market_cap']/intrinsic_value)
+            mos.loc[symbol, 'margin_of_safety'] = margin_of_safety
+        mos = mos[['margin_of_safety', 'margin_of_safety_volatility']] * 100 # turn into percent values
 
-            # calculate margin of safety
-            market_cap = vault_analysis['info'].loc[symbol, 'market_cap']
-            margin_of_safety = (1-(market_cap/intrinsic_value))*100 # in percent
-            data.loc[symbol, 'margin_of_safety'] = margin_of_safety
-
-        return data
+        return mos
 
     def __get_data(self):
         symbols = self.tickers.get_symbols()
@@ -461,28 +442,22 @@ class Analysis():
         self.data = self.db.table_read('analysis')
         self.data.drop('timestamp', axis=1, inplace=True)
 
-        return
+        # return
     
-        # add industry peers data
+        # add industry peers diff data
         industries = self.data['industry'].dropna().unique()
         peers_parameters = [
             'pe_ttm', 'pe_forward',
         ]
         peers_parameters = [p for p in peers_parameters if p in self.data.columns]
-        peers_parameters_new = [(p+'_peers') for p in peers_parameters]
+        peers_parameters_new = [(p+'_peers_diff') for p in peers_parameters]
         for industry in industries:
             # go through each industry
             is_industry = self.data['industry'] == industry
 
             # find mean or median from each industry
             industry_peers = self.data[is_industry][peers_parameters]
-            industry_average = industry_peers.mean().to_frame('mean')
-            industry_average['median'] = industry_peers.median()
-            industry_average['similarity'] = abs(industry_average['mean']-industry_average['median']) / \
-                ((industry_average['mean']+industry_average['median']).abs()/2)
-            industry_average.loc[industry_average['similarity'] > 0.2, 'average'] = industry_average['median']
-            industry_average.loc[industry_average['similarity'] <= 0.2, 'average'] = industry_average['mean']
-            industry_average = industry_average['average']
+            industry_average = utils.get_average(industry_peers)
 
             # set difference between values and peers values if symbols in that industry
             self.data.loc[is_industry, peers_parameters_new] = self.data.loc[is_industry, peers_parameters].values - industry_average.values

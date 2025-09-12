@@ -19,8 +19,12 @@ def get_trends(df, ratio_base=None, fill_gaps=True):
         column_data = df[column]
 
         last_valid_index = column_data.last_valid_index()
-        trends.loc[column, 'last_valid_index'] = last_valid_index
-        trends.loc[column, 'last_valid_value'] = column_data.loc[last_valid_index]
+        if last_valid_index is None:
+            trends.loc[column, 'last_valid_index'] = np.nan
+            trends.loc[column, 'last_valid_value'] = np.nan
+        else:
+            trends.loc[column, 'last_valid_index'] = last_valid_index
+            trends.loc[column, 'last_valid_value'] = column_data.loc[last_valid_index]
 
         # got data from first notna to last notna 
         column_data = column_data.loc[column_data.first_valid_index():column_data.last_valid_index()]
@@ -45,6 +49,9 @@ def get_trends(df, ratio_base=None, fill_gaps=True):
         coeffs = np.polyfit(column_data.index, column_data.values, 1)
         trend = np.polyval(coeffs, column_data.index)
         trend_mean = np.abs(trend.mean())
+        if trend_mean == 0:
+            trends.loc[column] = np.nan
+            continue
         
         # get trend values
         trends.loc[column, 'trend_step'] = coeffs[0]
@@ -58,6 +65,6 @@ def get_trends(df, ratio_base=None, fill_gaps=True):
         
         # calculate volatility
         residual_std = np.std(column_data.values - trend)
-        trends.loc[column, 'volatility'] = coeffs[0] = residual_std / trend_mean
+        trends.loc[column, 'volatility'] = residual_std / trend_mean
     
     return trends
