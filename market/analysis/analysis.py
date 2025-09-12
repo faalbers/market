@@ -115,8 +115,8 @@ class Analysis():
                 end_period = trends[name+'_period_end'].infer_objects()
                 trends.drop(name+'_period_end', axis=1, inplace=True)
                 if period == 'quarterly':
-                    trends[name+'_year_end'] = end_period.dt.year
-                    trends[name+'_month_end'] = end_period.dt.month
+                    trends[name+'_end_year'] = end_period.dt.year
+                    trends[name+'_end_month'] = end_period.dt.month
                 elif period == 'yearly':
                     trends[name+'_year_end'] = end_period
                 data = data.merge(trends, how='left', left_index=True, right_index=True)
