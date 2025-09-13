@@ -5,6 +5,8 @@
 /testscripts
 /academy
 /settings
+/build
+/dist
 __pycache__
 *.db
 *.pickle
